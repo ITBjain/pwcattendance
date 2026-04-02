@@ -15,6 +15,7 @@ namespace PwcApi.Models
         public DateTime? CheckOutTime { get; set; }
         public string? CheckInImage { get; set; }
         public string? CheckOutImage { get; set; }
+
         public string? CheckInLocation { get; set; }
         public string? CheckOutLocation { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

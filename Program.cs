@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using PwcApi.Data;
 using System;
-using Scalar.AspNetCore; // 👈 Brings in the new UI
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -18,19 +17,17 @@ if (string.IsNullOrEmpty(connectionString))
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
 
-// 3. Add Modern .NET 10 OpenAPI (Replaces AddSwaggerGen)
-builder.Services.AddOpenApi();
+// 3. Add Swagger Gen (Compatible with Swashbuckle 7.x)
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
-    // Generates the API specification
-    app.MapOpenApi();
-    
-    // Maps the interactive UI (Replaces UseSwaggerUI)
-    app.MapScalarApiReference();
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
 
 app.UseHttpsRedirection();

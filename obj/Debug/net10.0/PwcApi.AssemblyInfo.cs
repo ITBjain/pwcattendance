@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("PwcApi")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+5a8bf65650c2cfe62832f0cb310f8b6f1be5ae6e")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+f4add98c4c3cca6aaaef970dfe3f67621c4c23da")]
 [assembly: System.Reflection.AssemblyProductAttribute("PwcApi")]
 [assembly: System.Reflection.AssemblyTitleAttribute("PwcApi")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
