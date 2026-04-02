@@ -4,20 +4,29 @@ using System;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. Add Controllers
+// 1. BULLETPROOF PORT BINDING FOR RAILWAY
+// This grabs Railway's exact port and forces .NET to use it.
+var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
+builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+
+// 2. Add Controllers
 builder.Services.AddControllers();
 
-// 2. Configure MySQL
+// 3. Configure MySQL
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 if (string.IsNullOrEmpty(connectionString))
 {
     throw new InvalidOperationException("🚨 Database connection string 'DefaultConnection' is missing!");
 }
 
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
+// 4. FIX: Use Hardcoded Version instead of AutoDetect
+// This stops the app from freezing/crashing if Hostinger is slow to respond on boot.
+var serverVersion = new MySqlServerVersion(new Version(8, 0, 30)); 
 
-// 3. Add Swagger Gen (Compatible with Swashbuckle 7.x)
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseMySql(connectionString, serverVersion));
+
+// 5. Add Swagger Gen 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -30,6 +39,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+// app.UseHttpsRedirection(); <-- KEEP THIS DELETED/COMMENTED OUT
 app.UseAuthorization();
 app.MapControllers();
 
