@@ -4,10 +4,15 @@ using System;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. BULLETPROOF PORT BINDING FOR RAILWAY
-// This grabs Railway's exact port and forces .NET to use it.
-var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
-builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+// 1. DYNAMIC PORT BINDING (Works Locally + on Railway)
+var port = Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrEmpty(port))
+{
+    // If it finds a port (like on Railway), use it.
+    builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+}
+// If 'port' is null (like on your Mac), it will automatically fall back 
+// to using Port 5086 from your launchSettings.json!
 
 // 2. Add Controllers
 builder.Services.AddControllers();
@@ -46,4 +51,14 @@ app.MapControllers();
 app.Run();
 
 //hello world this is a test line i a, typing right now to see if it works  actually and  think it will do
- 
+
+
+
+
+
+
+
+
+
+
+
