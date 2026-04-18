@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace PwcApi.Models
 {
-    [Table("ParentsEnrollments")]
+    [Table("ParentEnrollments")]
     public class ParentsEnrollment
     {
         [Key]

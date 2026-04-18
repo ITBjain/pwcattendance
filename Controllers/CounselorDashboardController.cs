@@ -82,40 +82,52 @@ public async Task<IActionResult> Login([FromBody] LoginRequest request)
             return Ok(schools);
         }
 
-        // GET: api/counselordashboard/parents/{schoolId}
-        [HttpGet("parents/{schoolId}")]
-        public async Task<IActionResult> GetParents(string schoolId)
-        {
-            // 1. Fetch Potential Parents
-            var potentialParents = await _context.Potential_Parents
-                .Where(p => p.School_Name == schoolId) 
-                .Select(p => new ParentResponse 
-                { 
-                    ParentName = p.Parent_Name ?? "Unknown", 
-                    ParentPhone = p.Parent_Phone ?? "N/A", 
-                    ChildName = p.Child_Name ?? "Unknown", 
-                    Status = "Potential",
-                    PaymentStatus = "N/A"
-                })
-                .ToListAsync();
+     // GET: api/counselordashboard/parents/{schoolId}
+[HttpGet("parents/{schoolId}")]
+public async Task<IActionResult> GetParents(string schoolId)
+{
+    try
+    {
+        // 1. Clean the incoming ID to remove any accidental spaces
+        var cleanSchoolId = schoolId.Trim();
 
-            // 2. Fetch Enrolled Parents
-            var enrolledParents = await _context.ParentsEnrollments
-                .Where(p => p.SchoolId == schoolId)
-                .Select(p => new ParentResponse 
-                { 
-                    ParentName = p.ParentName ?? "Unknown", 
-                    ParentPhone = p.ParentPhone ?? "N/A", 
-                    ChildName = p.ChildName ?? "Unknown", 
-                    Status = "Enrolled",
-                    PaymentStatus = p.PaymentStatus ?? "Pending"
-                })
-                .ToListAsync();
+        // 2. Fetch Potential Parents (Matching exact trimmed ID)
+        var potentialParents = await _context.Potential_Parents
+            .Where(p => p.School_Name != null && p.School_Name.Trim() == cleanSchoolId) 
+            .Select(p => new ParentResponse 
+            { 
+                ParentName = p.Parent_Name ?? "Unknown", 
+                ParentPhone = p.Parent_Phone ?? "N/A", 
+                ChildName = p.Child_Name ?? "Unknown", 
+                Status = "Potential",
+                PaymentStatus = "N/A"
+            })
+            .ToListAsync();
 
-            // 3. Combine both lists
-            var allParents = potentialParents.Concat(enrolledParents).OrderBy(p => p.Status).ToList();
+        // 3. Fetch Enrolled Parents (Matching exact trimmed ID)
+        var enrolledParents = await _context.ParentsEnrollments
+            .Where(p => p.SchoolId != null && p.SchoolId.Trim() == cleanSchoolId)
+            .Select(p => new ParentResponse 
+            { 
+                ParentName = p.ParentName ?? "Unknown", 
+                ParentPhone = p.ParentPhone ?? "N/A", 
+                ChildName = p.ChildName ?? "Unknown", 
+                Status = "Enrolled",
+                PaymentStatus = p.PaymentStatus ?? "Pending"
+            })
+            .ToListAsync();
 
-            return Ok(allParents);
-        }
+        // 4. Combine both lists
+        var allParents = potentialParents.Concat(enrolledParents).OrderBy(p => p.Status).ToList();
+
+        return Ok(allParents);
+    }
+    catch (Exception ex)
+    {
+        // If Hostinger's Linux MySQL rejects the table name (e.g., case sensitivity issue), 
+        // this will catch it and print the exact error instead of failing silently.
+        return StatusCode(500, new { message = $"DB ERROR: {ex.InnerException?.Message ?? ex.Message}" });
+    }
+}
     }
 }
