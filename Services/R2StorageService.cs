@@ -12,21 +12,22 @@ namespace PwcApi.Services
     {
         private readonly IAmazonS3 _s3Client;
         private readonly string _bucketName;
-        private readonly string _publicDomain;
+        private readonly string _publicBaseUrl;
 
         public R2StorageService(IConfiguration config)
         {
-            var accountId = config["R2Settings:AccountId"];
-            var accessKey = config["R2Settings:AccessKey"];
-            var secretKey = config["R2Settings:SecretKey"];
+            // Read exact keys from your updated appsettings.json
+            var serviceUrl = config["CloudflareR2:ServiceUrl"];
+            var accessKey = config["CloudflareR2:AccessKey"];
+            var secretKey = config["CloudflareR2:SecretKey"];
             
-            _bucketName = config["R2Settings:BucketName"] ?? "pwc-attendance";
-            _publicDomain = config["R2Settings:PublicDomain"] ?? "";
+            _bucketName = config["CloudflareR2:BucketName"] ?? "pegasus-resources";
+            _publicBaseUrl = config["CloudflareR2:PublicBaseUrl"] ?? "";
 
-            // Point the S3 Client to Cloudflare R2
+            // Point the S3 Client directly to your full Service URL
             var s3Config = new AmazonS3Config
             {
-                ServiceURL = $"https://{accountId}.r2.cloudflarestorage.com",
+                ServiceURL = serviceUrl,
                 AuthenticationRegion = "auto" // R2 requires "auto"
             };
 
@@ -62,7 +63,9 @@ namespace PwcApi.Services
             }
 
             // 5. Return the public URL to save in MySQL
-            return $"{_publicDomain}/{fileName}";
+            // TrimEnd('/') ensures we don't accidentally get double slashes like ".dev/pegasus-resources//checkin_..."
+            var baseUrl = _publicBaseUrl.TrimEnd('/');
+            return $"{baseUrl}/{fileName}";
         }
     }
 }
