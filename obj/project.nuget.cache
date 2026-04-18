@@ -1,9 +1,11 @@
 {
   "version": 2,
-  "dgSpecHash": "jggOLKikHAg=",
+  "dgSpecHash": "a0PgfDV/Hyk=",
   "success": true,
   "projectFilePath": "/Users/bjain/vsProjects/PWC/PwcApi/PwcApi.csproj",
   "expectedPackageFiles": [
+    "/Users/bjain/.nuget/packages/awssdk.core/4.0.3.29/awssdk.core.4.0.3.29.nupkg.sha512",
+    "/Users/bjain/.nuget/packages/awssdk.s3/4.0.21.2/awssdk.s3.4.0.21.2.nupkg.sha512",
     "/Users/bjain/.nuget/packages/humanizer.core/2.14.1/humanizer.core.2.14.1.nupkg.sha512",
     "/Users/bjain/.nuget/packages/microsoft.bcl.asyncinterfaces/7.0.0/microsoft.bcl.asyncinterfaces.7.0.0.nupkg.sha512",
     "/Users/bjain/.nuget/packages/microsoft.build.framework/17.8.3/microsoft.build.framework.17.8.3.nupkg.sha512",

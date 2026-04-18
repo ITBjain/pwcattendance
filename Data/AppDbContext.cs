@@ -7,12 +7,15 @@ namespace PwcApi.Data
     {
         public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
-        public DbSet<CoachAttendance> CoachAttendances { get; set; } // Existing
+        // REMOVED: public DbSet<CoachAttendance> CoachAttendances { get; set; }
         
-        // New Tables added for Dashboard
+        // NEW ATTENDANCE TABLE
+        public DbSet<ResourceAttendance> ResourceAttendances { get; set; }
+        
+        // Existing Dashboard Tables
         public DbSet<ResourceMaster> ResourceMasters { get; set; }
         public DbSet<SchoolMaster> SchoolMaster { get; set; }
         public DbSet<PotentialParent> Potential_Parents { get; set; }
-        public DbSet<ParentsEnrollment> ParentsEnrollments { get; set; }
+        public DbSet<ParentsEnrollment> ParentsEnrollments { get; set; } 
     }
 }

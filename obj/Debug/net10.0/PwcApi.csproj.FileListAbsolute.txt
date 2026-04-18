@@ -121,3 +121,5 @@
 /Users/bjain/vsProjects/PWC/PwcApi/obj/Debug/net10.0/PwcApi.pdb
 /Users/bjain/vsProjects/PWC/PwcApi/obj/Debug/net10.0/PwcApi.genruntimeconfig.cache
 /Users/bjain/vsProjects/PWC/PwcApi/obj/Debug/net10.0/ref/PwcApi.dll
+/Users/bjain/vsProjects/PWC/PwcApi/bin/Debug/net10.0/AWSSDK.Core.dll
+/Users/bjain/vsProjects/PWC/PwcApi/bin/Debug/net10.0/AWSSDK.S3.dll

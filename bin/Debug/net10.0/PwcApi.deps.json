@@ -8,12 +8,32 @@
     ".NETCoreApp,Version=v10.0": {
       "PwcApi/1.0.0": {
         "dependencies": {
+          "AWSSDK.S3": "4.0.21.2",
           "Microsoft.EntityFrameworkCore.Design": "9.0.0",
           "Pomelo.EntityFrameworkCore.MySql": "9.0.0",
           "Swashbuckle.AspNetCore": "7.2.0"
         },
         "runtime": {
           "PwcApi.dll": {}
+        }
+      },
+      "AWSSDK.Core/4.0.3.29": {
+        "runtime": {
+          "lib/net8.0/AWSSDK.Core.dll": {
+            "assemblyVersion": "4.0.0.0",
+            "fileVersion": "4.0.3.29"
+          }
+        }
+      },
+      "AWSSDK.S3/4.0.21.2": {
+        "dependencies": {
+          "AWSSDK.Core": "4.0.3.29"
+        },
+        "runtime": {
+          "lib/net8.0/AWSSDK.S3.dll": {
+            "assemblyVersion": "4.0.0.0",
+            "fileVersion": "4.0.21.2"
+          }
         }
       },
       "Humanizer.Core/2.14.1": {
@@ -515,6 +535,20 @@
       "type": "project",
       "serviceable": false,
       "sha512": ""
+    },
+    "AWSSDK.Core/4.0.3.29": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-y07n9BHBVRDe3fDAjitnOBPwDwJ5NZ4oOh6ZvOizYWEsJnYcs34FQtTJ70Gt17qTCH86ma5kJdyMZ2lixm/dqg==",
+      "path": "awssdk.core/4.0.3.29",
+      "hashPath": "awssdk.core.4.0.3.29.nupkg.sha512"
+    },
+    "AWSSDK.S3/4.0.21.2": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-3Yeh5DjpfnmKKW8z1684LxUWBVau1ozmLY9vpLhwv9uqCa2S3wk6xK7KCBSlM2i6RQ14Wabyqfqo1Y27etE00Q==",
+      "path": "awssdk.s3/4.0.21.2",
+      "hashPath": "awssdk.s3.4.0.21.2.nupkg.sha512"
     },
     "Humanizer.Core/2.14.1": {
       "type": "package",

@@ -30,7 +30,8 @@ var serverVersion = new MySqlServerVersion(new Version(8, 0, 30));
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseMySql(connectionString, serverVersion));
-
+// Register the R2 Storage Service
+builder.Services.AddSingleton<PwcApi.Services.R2StorageService>();
 // 5. Add Swagger Gen 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
