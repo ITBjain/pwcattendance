@@ -3,7 +3,6 @@ using Microsoft.EntityFrameworkCore;
 using PwcApi.Data;
 using PwcApi.DTOs;
 using PwcApi.Models;
-using PwcApi.Services; // Add this
 using System;
 using System.Threading.Tasks;
 
@@ -14,37 +13,37 @@ namespace PwcApi.Controllers
     public class AttendanceController : ControllerBase
     {
         private readonly AppDbContext _context;
-        private readonly R2StorageService _r2Service; // Inject Service
 
-        public AttendanceController(AppDbContext context, R2StorageService r2Service)
+        public AttendanceController(AppDbContext context)
         {
             _context = context;
-            _r2Service = r2Service;
         }
 
+        // POST: api/attendance/checkin
         [HttpPost("checkin")]
         public async Task<IActionResult> CheckIn([FromBody] CheckInRequest request)
         {
             if (request == null) return BadRequest("Invalid payload");
 
+            // Check if already checked in for this specific session using ResourceId
             var existingSession = await _context.ResourceAttendances
                 .FirstOrDefaultAsync(a => a.SessionId == request.SessionId && a.ResourceId == request.CoachId);
 
-            if (existingSession != null) return Conflict(new { message = "Already checked in." });
-
-            // 🔥 UPLOAD IMAGE TO R2 🔥
-            string imageUrl = await _r2Service.UploadBase64ImageAsync(request.CheckInImage, $"checkin_{request.CoachId}");
+            if (existingSession != null)
+            {
+                return Conflict(new { message = "Resource is already checked into this session." });
+            }
 
             var currentTime = DateTime.UtcNow;
 
             var attendanceRecord = new ResourceAttendance
             {
-                ResourceId = request.CoachId,
+                ResourceId = request.CoachId, // Maps the Android app's CoachId to the DB's ResourceId
                 SchoolId = request.SchoolId,
                 SessionId = request.SessionId,
-                CheckInDate = currentTime.Date,
+                CheckInDate = currentTime.Date, // Replaced 'Date'
                 CheckInTime = currentTime,
-                CheckInImage = imageUrl, // Save the sleek R2 URL, not the massive Base64 string!
+                CheckInImage = request.CheckInImage, 
                 CheckInLocation = request.CheckInLocation
             };
 
@@ -54,22 +53,28 @@ namespace PwcApi.Controllers
             return Ok(new { message = "Check-in successful", recordId = attendanceRecord.Id });
         }
 
+        // PUT: api/attendance/checkout
         [HttpPut("checkout")]
         public async Task<IActionResult> CheckOut([FromBody] CheckOutRequest request)
         {
             if (request == null) return BadRequest("Invalid payload");
 
+            // Find the active check-in record for this session
             var attendanceRecord = await _context.ResourceAttendances
                 .FirstOrDefaultAsync(a => a.SessionId == request.SessionId && a.ResourceId == request.CoachId);
 
-            if (attendanceRecord == null) return NotFound(new { message = "Session not found." });
-            if (attendanceRecord.CheckOutTime != null) return BadRequest(new { message = "Already checked out." });
+            if (attendanceRecord == null)
+            {
+                return NotFound(new { message = "Active check-in session not found." });
+            }
 
-            // 🔥 UPLOAD IMAGE TO R2 🔥
-            string imageUrl = await _r2Service.UploadBase64ImageAsync(request.CheckOutImage, $"checkout_{request.CoachId}");
+            if (attendanceRecord.CheckOutTime != null)
+            {
+                return BadRequest(new { message = "Resource has already checked out of this session." });
+            }
 
             attendanceRecord.CheckOutTime = DateTime.UtcNow;
-            attendanceRecord.CheckOutImage = imageUrl; // Save the URL
+            attendanceRecord.CheckOutImage = request.CheckOutImage;
             attendanceRecord.CheckOutLocation = request.CheckOutLocation;
 
             _context.ResourceAttendances.Update(attendanceRecord);

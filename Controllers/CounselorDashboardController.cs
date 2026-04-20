@@ -82,6 +82,39 @@ public async Task<IActionResult> Login([FromBody] LoginRequest request)
             return Ok(schools);
         }
 
+        // GET: api/counselordashboard/sessions/{schoolId}
+[HttpGet("sessions/{schoolId}")]
+public async Task<IActionResult> GetSessionsForSchool(string schoolId)
+{
+    try
+    {
+        var cleanSchoolId = schoolId.Trim();
+
+        // Query the SessionMasters table to find sessions linked to this school
+        var sessions = await _context.SessionMasters
+            .Where(s => s.SchoolId == cleanSchoolId)
+            .Select(s => new 
+            { 
+                sessionId = s.Id,
+                // If your SessionMasters table has a Name column, use it here.
+                // Otherwise, we just fall back to showing the ID.
+                sessionName = s.Id 
+            })
+            .ToListAsync();
+
+        if (!sessions.Any())
+        {
+            return NotFound(new { message = "No active sessions found for this school." });
+        }
+
+        return Ok(sessions);
+    }
+    catch (Exception ex)
+    {
+        return StatusCode(500, new { message = $"DB ERROR: {ex.InnerException?.Message ?? ex.Message}" });
+    }
+}
+
      // GET: api/counselordashboard/parents/{schoolId}
 [HttpGet("parents/{schoolId}")]
 public async Task<IActionResult> GetParents(string schoolId)
