@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using PwcApi.Data;
 using PwcApi.DTOs;
 using PwcApi.Models;
+using PwcApi.Services;
 using System;
 using System.Threading.Tasks;
 
@@ -13,37 +14,44 @@ namespace PwcApi.Controllers
     public class AttendanceController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly R2StorageService _r2Service;
 
-        public AttendanceController(AppDbContext context)
+        public AttendanceController(AppDbContext context, R2StorageService r2Service)
         {
             _context = context;
+            _r2Service = r2Service;
         }
 
-        // POST: api/attendance/checkin
         [HttpPost("checkin")]
         public async Task<IActionResult> CheckIn([FromBody] CheckInRequest request)
         {
             if (request == null) return BadRequest("Invalid payload");
 
-            // Check if already checked in for this specific session using ResourceId
-            var existingSession = await _context.ResourceAttendances
-                .FirstOrDefaultAsync(a => a.SessionId == request.SessionId && a.ResourceId == request.CoachId);
+            if (!int.TryParse(request.CoachId, out int resourceIdInt))
+                return BadRequest(new { message = "Invalid Coach ID format. Must be a number." });
 
-            if (existingSession != null)
-            {
-                return Conflict(new { message = "Resource is already checked into this session." });
-            }
+            // 1. Verify the user exists
+            var resourceExists = await _context.ResourceMasters.AnyAsync(r => r.Id == resourceIdInt);
+            if (!resourceExists) return NotFound(new { message = $"Counselor with ID {request.CoachId} does not exist." });
+
+            // 🔥 FIX 2: Check if they are already checked in by looking for a missing CheckOutTime
+            var existingSession = await _context.ResourceAttendances
+                .FirstOrDefaultAsync(a => a.ResourceId == resourceIdInt && a.CheckOutTime == null);
+
+            if (existingSession != null) return Conflict(new { message = "You are already checked in. Please check out first." });
+
+            string? imageUrl = await _r2Service.UploadBase64ImageAsync(request.CheckInImage, $"checkin_{request.CoachId}");
 
             var currentTime = DateTime.UtcNow;
 
+            // 3. Save to Database (We completely ignore SessionId now)
             var attendanceRecord = new ResourceAttendance
             {
-                ResourceId = request.CoachId, // Maps the Android app's CoachId to the DB's ResourceId
-                SchoolId = request.SchoolId,
-                SessionId = request.SessionId,
-                CheckInDate = currentTime.Date, // Replaced 'Date'
-                CheckInTime = currentTime,
-                CheckInImage = request.CheckInImage, 
+                ResourceId = resourceIdInt,   
+                SchoolId = request.SchoolId,  
+                CheckInDate = currentTime.Date,
+                CheckInTime = currentTime.TimeOfDay, 
+                CheckInImage = imageUrl, 
                 CheckInLocation = request.CheckInLocation
             };
 
@@ -53,28 +61,24 @@ namespace PwcApi.Controllers
             return Ok(new { message = "Check-in successful", recordId = attendanceRecord.Id });
         }
 
-        // PUT: api/attendance/checkout
         [HttpPut("checkout")]
         public async Task<IActionResult> CheckOut([FromBody] CheckOutRequest request)
         {
             if (request == null) return BadRequest("Invalid payload");
 
-            // Find the active check-in record for this session
+            if (!int.TryParse(request.CoachId, out int resourceIdInt))
+                return BadRequest(new { message = "Invalid Coach ID format. Must be a number." });
+
+            // 🔥 FIX 3: Find their active session (the one where CheckOutTime is null)
             var attendanceRecord = await _context.ResourceAttendances
-                .FirstOrDefaultAsync(a => a.SessionId == request.SessionId && a.ResourceId == request.CoachId);
+                .FirstOrDefaultAsync(a => a.ResourceId == resourceIdInt && a.CheckOutTime == null);
 
-            if (attendanceRecord == null)
-            {
-                return NotFound(new { message = "Active check-in session not found." });
-            }
+            if (attendanceRecord == null) return NotFound(new { message = "No active check-in found to check out from." });
 
-            if (attendanceRecord.CheckOutTime != null)
-            {
-                return BadRequest(new { message = "Resource has already checked out of this session." });
-            }
+            string? imageUrl = await _r2Service.UploadBase64ImageAsync(request.CheckOutImage, $"checkout_{request.CoachId}");
 
-            attendanceRecord.CheckOutTime = DateTime.UtcNow;
-            attendanceRecord.CheckOutImage = request.CheckOutImage;
+            attendanceRecord.CheckOutTime = DateTime.UtcNow.TimeOfDay;
+            attendanceRecord.CheckOutImage = imageUrl; 
             attendanceRecord.CheckOutLocation = request.CheckOutLocation;
 
             _context.ResourceAttendances.Update(attendanceRecord);

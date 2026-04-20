@@ -16,38 +16,39 @@ namespace PwcApi.Services
 
         public R2StorageService(IConfiguration config)
         {
-            var accountId = config["R2Settings:AccountId"];
-            var accessKey = config["R2Settings:AccessKey"];
-            var secretKey = config["R2Settings:SecretKey"];
+            // 🔥 FIXED: Now reading from your new "CloudflareR2" JSON keys
+            var serviceUrl = config["CloudflareR2:ServiceUrl"];
+            var accessKey = config["CloudflareR2:AccessKey"];
+            var secretKey = config["CloudflareR2:SecretKey"];
             
-            _bucketName = config["R2Settings:BucketName"] ?? "pwc-attendance";
-            _publicDomain = config["R2Settings:PublicDomain"] ?? "";
+            _bucketName = config["CloudflareR2:BucketName"] ?? "pegasus-resources";
+            _publicDomain = config["CloudflareR2:PublicBaseUrl"] ?? "";
 
-            // Point the S3 Client to Cloudflare R2
             var s3Config = new AmazonS3Config
             {
-                ServiceURL = $"https://{accountId}.r2.cloudflarestorage.com",
-                AuthenticationRegion = "auto" // R2 requires "auto"
+                ServiceURL = serviceUrl,
+                AuthenticationRegion = "auto" 
             };
 
             _s3Client = new AmazonS3Client(accessKey, secretKey, s3Config);
         }
 
-       public async Task<string> UploadBase64ImageAsync(string base64Image, string prefix)
+        // 🔥 FIXED: Removed the extra 'f' in the name
+        // 🔥 FIXED: Added '?' to Task<string?> to safely allow returning null
+        public async Task<string?> UploadBase64ImageAsync(string base64Image, string prefix)
         {
             if (string.IsNullOrEmpty(base64Image) || base64Image == "string") 
             {
-                // If it's dummy Swagger data or empty, skip the upload safely
                 return null; 
             }
 
-            // 1. Strip the prefix added by the Android app (data:image/jpeg:base64,)
+            // 1. Strip the prefix added by the Android app
             var cleanBase64 = Regex.Replace(base64Image, @"^data:image\/[a-zA-Z]+;?base64,", string.Empty);
             
-            // 2. 🔥 BULLETPROOFING: Strip any hidden newlines, carriage returns, or spaces
+            // 2. Strip any hidden newlines or spaces
             cleanBase64 = cleanBase64.Replace("\n", "").Replace("\r", "").Replace(" ", "");
 
-            // 3. Convert to binary byte array (Wrapped in try-catch just in case)
+            // 3. Convert to binary byte array
             byte[] imageBytes;
             try 
             {
@@ -55,7 +56,6 @@ namespace PwcApi.Services
             }
             catch (FormatException)
             {
-                // If it STILL fails, don't crash the server, just return null
                 Console.WriteLine("CRITICAL: Received invalid Base64 string.");
                 return null;
             }

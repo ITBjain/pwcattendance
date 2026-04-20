@@ -10,17 +10,17 @@ namespace PwcApi.Models
         [Key]
         public int Id { get; set; }
         
-        // Maps to CounselorId / CoachId
-        public string ResourceId { get; set; } = string.Empty; 
+        public int ResourceId { get; set; } 
+        
+        // 🔥 FIX 1: Add a '?' to make SessionId optional (nullable)
+        public int? SessionId { get; set; } 
         
         public string SchoolId { get; set; } = string.Empty;
-        public string SessionId { get; set; } = string.Empty;
         
-        // Updated from 'Date' to 'CheckInDate'
         public DateTime CheckInDate { get; set; } 
+        public TimeSpan? CheckInTime { get; set; }
+        public TimeSpan? CheckOutTime { get; set; }
         
-        public DateTime? CheckInTime { get; set; }
-        public DateTime? CheckOutTime { get; set; }
         public string? CheckInImage { get; set; }
         public string? CheckOutImage { get; set; }
         public string? CheckInLocation { get; set; }
