@@ -24,12 +24,44 @@ namespace PwcApi.DTOs
         public string ContactPhone { get; set; } = string.Empty;
     }
 
-    public class ParentResponse
+   public class ParentResponse
     {
-        public string ParentName { get; set; } = string.Empty;
-        public string ParentPhone { get; set; } = string.Empty;
-        public string ChildName { get; set; } = string.Empty;
+        public int Id { get; set; }
         public string Status { get; set; } = string.Empty; // "Potential" or "Enrolled"
-        public string PaymentStatus { get; set; } = string.Empty;
+        
+        // Common Fields
+        public string? ParentName { get; set; }
+        public string? ParentEmail { get; set; }
+        public string? ParentPhone { get; set; }
+        public string? ChildName { get; set; }
+        public DateTime? ChildDOB { get; set; }
+        public string? ChildSchoolName { get; set; }
+        public DateTime? CreatedAt { get; set; }
+        public int? MediaConsent { get; set; }
+
+        // Potential Specific Fields
+        public string? Remark { get; set; }
+
+        // Enrollment Specific Fields
+        public string? PaymentStatus { get; set; }
+        public DateTime? PaymentDate { get; set; }
+        public decimal? PaymentAmount { get; set; }
+        public string? BillingAddress { get; set; }
+        public string? BillingCity { get; set; }
+        public string? BillingState { get; set; }
+        public string? BillingPincode { get; set; }
+        public string? ChildSchoolCity { get; set; }
+        
+        // Session Details (Enrollment only)
+        public int? SessionId { get; set; }
+        public string? SessionName { get; set; }
+        public string? SessionAgeGroup { get; set; }
+        public string? SessionDays { get; set; }
+        public string? SessionFrequency { get; set; }
+        public string? SessionTimeSlot { get; set; }
+        
+        // Discount
+        public decimal? DiscountAmount { get; set; }
+        public string? DiscountCode { get; set; }
     }
 }
