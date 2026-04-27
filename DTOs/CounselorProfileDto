@@ -1,0 +1,12 @@
+public class CounselorProfileDto
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public string Role { get; set; }
+    public bool IsActive { get; set; }
+    public string CompanyEmail { get; set; }
+    public string PersonalEmail { get; set; } // Maps from 'Email' in DB
+    public string EmpId { get; set; }
+    public string Phone { get; set; }
+    public string DateOfJoining { get; set; }
+}

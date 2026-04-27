@@ -54,6 +54,39 @@ namespace PwcApi.Controllers
             });
         }
 
+        // ==========================================
+        // 🔥 NEW: GET COUNSELOR PROFILE ENDPOINT
+        // ==========================================
+        // GET: api/counselordashboard/profile/{counselorId}
+      // GET: api/counselordashboard/profile/{counselorId}
+        [HttpGet("profile/{counselorId}")]
+        public async Task<IActionResult> GetProfile(int counselorId)
+        {
+            var counselor = await _context.ResourceMasters
+                .FirstOrDefaultAsync(r => r.Id == counselorId && r.Role == "Counselor");
+
+            if (counselor == null)
+            {
+                return NotFound(new { message = "Counselor not found or inactive." });
+            }
+
+            var profile = new 
+            {
+                id = counselor.Id,
+                name = counselor.Name ?? "Unknown",
+                role = counselor.Role ?? "Counselor",
+                isActive = counselor.IsActive == 1, 
+                companyEmail = counselor.CompanyEmail ?? string.Empty,
+                personalEmail = counselor.Email ?? string.Empty, 
+                empId = counselor.EmpId ?? string.Empty,
+                phone = counselor.Phone ?? string.Empty,
+                
+                // 🔥 CHANGE THIS LINE: Convert the DateTime back to a clean string format for Android
+                dateOfJoining = counselor.DateOfJoining?.ToString("yyyy-MM-dd") ?? string.Empty
+            };
+
+            return Ok(profile);
+        }
         // GET: api/counselordashboard/centres/{counselorId}
         [HttpGet("centres/{counselorId}")]
         public async Task<IActionResult> GetCentres(int counselorId)
@@ -64,7 +97,7 @@ namespace PwcApi.Controllers
                 .Select(s => new CentreResponse 
                 { 
                     SchoolId = s.SchoolId, 
-                    SchoolName = s.SchoolName, 
+                    SchoolName = s.SchoolName ?? "Unknown Centre", 
                     Address = $"{s.SchoolCity}, {s.SchoolAddress}", 
                     ContactName = s.ContactPersonName ?? "N/A", 
                     ContactPhone = s.ContactPersonPhone ?? "N/A"
@@ -171,85 +204,85 @@ namespace PwcApi.Controllers
             }
         }
 
-      // GET: api/counselordashboard/parents/{schoolId}
-[HttpGet("parents/{schoolId}")]
-public async Task<IActionResult> GetParents(string schoolId)
-{
-    try
-    {
-        var cleanSchoolId = schoolId.Trim();
+        // GET: api/counselordashboard/parents/{schoolId}
+        [HttpGet("parents/{schoolId}")]
+        public async Task<IActionResult> GetParents(string schoolId)
+        {
+            try
+            {
+                var cleanSchoolId = schoolId.Trim();
 
-        // 1. Fetch Complete Potential Parents
-        var potentialParents = await _context.Potential_Parents
-            .Where(p => p.School_Name != null && p.School_Name.Trim() == cleanSchoolId) 
-            .Select(p => new ParentResponse 
-            { 
-                Id = p.Id,
-                Status = "Potential",
-                ParentName = p.Parent_Name, 
-                ParentEmail = p.Parent_Email,
-                ParentPhone = p.Parent_Phone, 
-                ChildName = p.Child_Name, 
-                ChildDOB = p.Child_DOB,
-                ChildSchoolName = p.ChildSchoolName,
-                CreatedAt = p.CreatedAt,
-                MediaConsent = p.MediaConsent,
-                Remark = p.Remark,
-                
-                // Enrollment fields default to null/empty for Potential parents
-                PaymentStatus = "N/A" 
-            })
-            .ToListAsync();
+                // 1. Fetch Complete Potential Parents
+                var potentialParents = await _context.Potential_Parents
+                    .Where(p => p.School_Name != null && p.School_Name.Trim() == cleanSchoolId) 
+                    .Select(p => new ParentResponse 
+                    { 
+                        Id = p.Id,
+                        Status = "Potential",
+                        ParentName = p.Parent_Name, 
+                        ParentEmail = p.Parent_Email,
+                        ParentPhone = p.Parent_Phone, 
+                        ChildName = p.Child_Name, 
+                        ChildDOB = p.Child_DOB,
+                        ChildSchoolName = p.ChildSchoolName,
+                        CreatedAt = p.CreatedAt,
+                        MediaConsent = p.MediaConsent,
+                        Remark = p.Remark,
+                        
+                        // Enrollment fields default to null/empty for Potential parents
+                        PaymentStatus = "N/A" 
+                    })
+                    .ToListAsync();
 
-        // 2. Fetch Complete Enrolled Parents
-        var enrolledParents = await _context.ParentsEnrollments
-            .Where(p => p.SchoolId != null && p.SchoolId.Trim() == cleanSchoolId)
-            .Select(p => new ParentResponse 
-            { 
-                Id = p.Id,
-                Status = "Enrolled",
-                ParentName = p.ParentName, 
-                ParentEmail = p.ParentEmail,
-                ParentPhone = p.ParentPhone, 
-                ChildName = p.ChildName, 
-                ChildDOB = p.ChildDOB,
-                ChildSchoolName = p.ChildSchoolName,
-                ChildSchoolCity = p.ChildSchoolCity,
-                CreatedAt = p.CreatedAt,
-                MediaConsent = p.MediaConsent,
-                
-                // Payment & Billing
-                PaymentStatus = p.PaymentStatus ?? "Pending",
-                PaymentDate = p.PaymentDate,
-                PaymentAmount = p.PaymentAmount,
-                BillingAddress = p.BillingAddress,
-                BillingCity = p.BillingCity,
-                BillingState = p.BillingState,
-                BillingPincode = p.BillingPincode,
-                
-                // Sessions
-                SessionId = p.SessionId,
-                SessionName = p.SessionName,
-                SessionAgeGroup = p.SessionAgeGroup,
-                SessionDays = p.SessionDays,
-                SessionFrequency = p.SessionFrequency,
-                SessionTimeSlot = p.SessionTimeSlot,
-                
-                // Discounts
-                DiscountAmount = p.DiscountAmount,
-                DiscountCode = p.DiscountCode
-            })
-            .ToListAsync();
+                // 2. Fetch Complete Enrolled Parents
+                var enrolledParents = await _context.ParentsEnrollments
+                    .Where(p => p.SchoolId != null && p.SchoolId.Trim() == cleanSchoolId)
+                    .Select(p => new ParentResponse 
+                    { 
+                        Id = p.Id,
+                        Status = "Enrolled",
+                        ParentName = p.ParentName, 
+                        ParentEmail = p.ParentEmail,
+                        ParentPhone = p.ParentPhone, 
+                        ChildName = p.ChildName, 
+                        ChildDOB = p.ChildDOB,
+                        ChildSchoolName = p.ChildSchoolName,
+                        ChildSchoolCity = p.ChildSchoolCity,
+                        CreatedAt = p.CreatedAt,
+                        MediaConsent = p.MediaConsent,
+                        
+                        // Payment & Billing
+                        PaymentStatus = p.PaymentStatus ?? "Pending",
+                        PaymentDate = p.PaymentDate,
+                        PaymentAmount = p.PaymentAmount,
+                        BillingAddress = p.BillingAddress,
+                        BillingCity = p.BillingCity,
+                        BillingState = p.BillingState,
+                        BillingPincode = p.BillingPincode,
+                        
+                        // Sessions
+                        SessionId = p.SessionId,
+                        SessionName = p.SessionName,
+                        SessionAgeGroup = p.SessionAgeGroup,
+                        SessionDays = p.SessionDays,
+                        SessionFrequency = p.SessionFrequency,
+                        SessionTimeSlot = p.SessionTimeSlot,
+                        
+                        // Discounts
+                        DiscountAmount = p.DiscountAmount,
+                        DiscountCode = p.DiscountCode
+                    })
+                    .ToListAsync();
 
-        // 3. Combine and sort
-        var allParents = potentialParents.Concat(enrolledParents).OrderBy(p => p.Status).ToList();
+                // 3. Combine and sort
+                var allParents = potentialParents.Concat(enrolledParents).OrderBy(p => p.Status).ToList();
 
-        return Ok(new { success = true, data = allParents });
-    }
-    catch (Exception ex)
-    {
-        return StatusCode(500, new { success = false, message = $"DB ERROR: {ex.InnerException?.Message ?? ex.Message}" });
-    }
-}
+                return Ok(new { success = true, data = allParents });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = $"DB ERROR: {ex.InnerException?.Message ?? ex.Message}" });
+            }
+        }
     }
 }
