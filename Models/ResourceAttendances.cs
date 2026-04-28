@@ -27,5 +27,12 @@ namespace PwcApi.Models
         public string? CheckOutLocation { get; set; }
         
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        // Add these to your existing ResourceAttendance.cs model
+        public int TotalCalls { get; set; } = 0;
+        public int TotalEmails { get; set; } = 0;
+        public int TotalWhatsApp { get; set; } = 0;
+        public int TotalParentsTargeted { get; set; } = 0;
+        public string? Remark { get; set; }
     }
 }

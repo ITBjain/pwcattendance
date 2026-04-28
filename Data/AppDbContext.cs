@@ -15,5 +15,6 @@ namespace PwcApi.Data
         
         // 🔥 THIS IS THE FIX FOR LINE 21:
         public DbSet<SessionMaster> SessionMasters { get; set; } 
+        public DbSet<AttendanceLog> CallReport { get; set;}
     }
 }
