@@ -1,4 +1,3 @@
-
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PwcApi.Data;
@@ -24,6 +23,19 @@ namespace PwcApi.Controllers
             _r2Service = r2Service;
         }
 
+        // 🔥 HELPER FUNCTION: Safely get IST on both Windows and Linux servers
+        private DateTime GetIndiaTime()
+        {
+            try 
+            {
+                return TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("India Standard Time"));
+            }
+            catch 
+            {
+                return TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata"));
+            }
+        }
+
         [HttpPost("checkin")]
         public async Task<IActionResult> CheckIn([FromBody] CheckInRequest request)
         {
@@ -34,17 +46,14 @@ namespace PwcApi.Controllers
                 if (!int.TryParse(request.CoachId, out int resourceIdInt))
                     return BadRequest(new { message = "Invalid Coach ID format. Must be a number." });
 
-                // 1. Verify the user exists
                 var resourceExists = await _context.ResourceMasters.AnyAsync(r => r.Id == resourceIdInt);
                 if (!resourceExists) return NotFound(new { message = $"Counselor with ID {request.CoachId} does not exist." });
 
-                // 2. Check if they are already checked in
                 var existingSession = await _context.ResourceAttendances
                     .FirstOrDefaultAsync(a => a.ResourceId == resourceIdInt && a.CheckOutTime == null);
 
                 if (existingSession != null) return Conflict(new { message = "You are already checked in. Please check out first." });
 
-                // 3. BULLETPROOF BASE64 CLEANER
                 string cleanBase64 = request.CheckInImage ?? "";
                 if (cleanBase64.Contains(",")) {
                     cleanBase64 = cleanBase64.Substring(cleanBase64.IndexOf(",") + 1);
@@ -52,15 +61,15 @@ namespace PwcApi.Controllers
 
                 string? imageUrl = await _r2Service.UploadBase64ImageAsync(cleanBase64, $"checkin_{request.CoachId}_{DateTime.UtcNow.Ticks}");
 
-                var currentTime = DateTime.UtcNow;
+                // 🔥 FIX: Use IST Time instead of UtcNow
+                var indiaTime = GetIndiaTime();
 
-                // 4. Save to Database with Counters Initialized to 0
                 var attendanceRecord = new ResourceAttendance
                 {
                     ResourceId = resourceIdInt,   
                     SchoolId = request.SchoolId,  
-                    CheckInDate = currentTime.Date,
-                    CheckInTime = currentTime.TimeOfDay, 
+                    CheckInDate = indiaTime.Date,
+                    CheckInTime = indiaTime.TimeOfDay, 
                     CheckInImage = imageUrl, 
                     CheckInLocation = request.CheckInLocation,
                     TotalCalls = 0,
@@ -80,9 +89,6 @@ namespace PwcApi.Controllers
             }
         }
 
-        // ========================================================
-        // 🔥 NEW: REAL-TIME SYNC API (Triggered silently by Android App)
-        // ========================================================
         [HttpPost("sync-activity")]
         public async Task<IActionResult> SyncActivity([FromBody] SyncActivityRequest request)
         {
@@ -95,7 +101,6 @@ namespace PwcApi.Controllers
             if (activeSession == null)
                 return NotFound(new { message = "No active session found. Must check-in first." });
 
-            // Update live telemetry numbers
             activeSession.TotalCalls = request.TotalCalls;
             activeSession.TotalEmails = request.TotalEmails;
             activeSession.TotalWhatsApp = request.TotalWhatsApp;
@@ -107,9 +112,6 @@ namespace PwcApi.Controllers
             return Ok(new { success = true });
         }
 
-        // ========================================================
-        // 🔥 NEW: GET ALL REPORTS (For the Android Report Tab)
-        // ========================================================
         [HttpGet("reports/{coachId}")]
         public async Task<IActionResult> GetReports(string coachId)
         {
@@ -151,14 +153,12 @@ namespace PwcApi.Controllers
 
                 if (attendanceRecord == null) return NotFound(new { message = "No active check-in found to check out from." });
 
-                // 🔥 BUSINESS RULE: Require a remark if no work was done
                 var totalActivity = request.TotalCalls + request.TotalEmails + request.TotalWhatsApp;
                 if (totalActivity == 0 && string.IsNullOrWhiteSpace(request.Remark))
                 {
                     return BadRequest(new { message = "Activity is 0. A remark is required to check out." });
                 }
 
-                // BULLETPROOF BASE64 CLEANER
                 string cleanBase64 = request.CheckOutImage ?? "";
                 if (cleanBase64.Contains(",")) {
                     cleanBase64 = cleanBase64.Substring(cleanBase64.IndexOf(",") + 1);
@@ -166,12 +166,13 @@ namespace PwcApi.Controllers
 
                 string? imageUrl = await _r2Service.UploadBase64ImageAsync(cleanBase64, $"checkout_{request.CoachId}_{DateTime.UtcNow.Ticks}");
 
-                // Finalize data
-                attendanceRecord.CheckOutTime = DateTime.UtcNow.TimeOfDay;
+                // 🔥 FIX: Use IST Time instead of UtcNow
+                var indiaTime = GetIndiaTime();
+
+                attendanceRecord.CheckOutTime = indiaTime.TimeOfDay;
                 attendanceRecord.CheckOutImage = imageUrl; 
                 attendanceRecord.CheckOutLocation = request.CheckOutLocation;
                 
-                // Save final telemetry
                 attendanceRecord.TotalCalls = request.TotalCalls;
                 attendanceRecord.TotalEmails = request.TotalEmails;
                 attendanceRecord.TotalWhatsApp = request.TotalWhatsApp;
@@ -189,9 +190,6 @@ namespace PwcApi.Controllers
             }
         }
 
-        // ========================================================
-        // 🛠️ BUSINESS CENTRAL INTEGRATION API (Unchanged)
-        // ========================================================
         [HttpGet("bc-sync/{empId}")]
         public async Task<IActionResult> GetAttendanceForBusinessCentral(string empId)
         {
