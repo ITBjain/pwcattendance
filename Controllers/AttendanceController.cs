@@ -59,9 +59,14 @@ namespace PwcApi.Controllers
                     cleanBase64 = cleanBase64.Substring(cleanBase64.IndexOf(",") + 1);
                 }
 
-                string? imageUrl = await _r2Service.UploadBase64ImageAsync(cleanBase64, $"checkin_{request.CoachId}_{DateTime.UtcNow.Ticks}");
+                // If it's a WorkFromHome auto punch-in or similar, image might be empty
+                string? imageUrl = null;
+                if (!string.IsNullOrWhiteSpace(cleanBase64)) 
+                {
+                    imageUrl = await _r2Service.UploadBase64ImageAsync(cleanBase64, $"checkin_{request.CoachId}_{DateTime.UtcNow.Ticks}");
+                }
 
-                // 🔥 FIX: Use IST Time instead of UtcNow
+                // Use IST Time instead of UtcNow
                 var indiaTime = GetIndiaTime();
 
                 var attendanceRecord = new ResourceAttendance
@@ -72,6 +77,11 @@ namespace PwcApi.Controllers
                     CheckInTime = indiaTime.TimeOfDay, 
                     CheckInImage = imageUrl, 
                     CheckInLocation = request.CheckInLocation,
+                    
+                    // 🔥 NEW: Store Attendance Type and Remark
+                    Type = request.Type ?? "InCentre",
+                    AttendanceRemark = request.AttendanceRemark,
+
                     TotalCalls = 0,
                     TotalEmails = 0,
                     TotalWhatsApp = 0,
@@ -131,7 +141,9 @@ namespace PwcApi.Controllers
                     emails = a.TotalEmails,
                     whatsapp = a.TotalWhatsApp,
                     targeted = a.TotalParentsTargeted,
-                    remark = a.Remark
+                    remark = a.Remark,
+                    type = a.Type,                        // 🔥 Pass Type back to UI
+                    attendanceRemark = a.AttendanceRemark // 🔥 Pass Remark back to UI
                 })
                 .ToListAsync();
 
@@ -164,20 +176,36 @@ namespace PwcApi.Controllers
                     cleanBase64 = cleanBase64.Substring(cleanBase64.IndexOf(",") + 1);
                 }
 
-                string? imageUrl = await _r2Service.UploadBase64ImageAsync(cleanBase64, $"checkout_{request.CoachId}_{DateTime.UtcNow.Ticks}");
+                string? imageUrl = null;
+                if (!string.IsNullOrWhiteSpace(cleanBase64)) 
+                {
+                    imageUrl = await _r2Service.UploadBase64ImageAsync(cleanBase64, $"checkout_{request.CoachId}_{DateTime.UtcNow.Ticks}");
+                }
 
-                // 🔥 FIX: Use IST Time instead of UtcNow
+                // Use IST Time
                 var indiaTime = GetIndiaTime();
 
                 attendanceRecord.CheckOutTime = indiaTime.TimeOfDay;
-                attendanceRecord.CheckOutImage = imageUrl; 
-                attendanceRecord.CheckOutLocation = request.CheckOutLocation;
                 
+                if (imageUrl != null) {
+                    attendanceRecord.CheckOutImage = imageUrl; 
+                }
+                
+                attendanceRecord.CheckOutLocation = request.CheckOutLocation;
                 attendanceRecord.TotalCalls = request.TotalCalls;
                 attendanceRecord.TotalEmails = request.TotalEmails;
                 attendanceRecord.TotalWhatsApp = request.TotalWhatsApp;
                 attendanceRecord.TotalParentsTargeted = request.TotalParentsTargeted;
                 attendanceRecord.Remark = request.Remark;
+
+                // 🔥 NEW: Handle Geofence OutOfRange Logic for Checkout
+                if (!string.IsNullOrEmpty(request.Type) && request.Type == "OutOfRange")
+                {
+                    attendanceRecord.Type = "OutOfRange";
+                    attendanceRecord.AttendanceRemark = string.IsNullOrWhiteSpace(attendanceRecord.AttendanceRemark) 
+                        ? request.AttendanceRemark 
+                        : attendanceRecord.AttendanceRemark + " | CheckOut: " + request.AttendanceRemark;
+                }
 
                 _context.ResourceAttendances.Update(attendanceRecord);
                 await _context.SaveChangesAsync();
@@ -187,6 +215,60 @@ namespace PwcApi.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, new { message = $"Backend Crash: {ex.Message}" });
+            }
+        }
+
+        // ===============================================================
+        // 🔥 NEW ENDPOINTS: INDIVIDUAL PARENT INTERACTION TRACKING
+        // ===============================================================
+
+        [HttpPost("log-interaction")]
+        public async Task<IActionResult> LogInteraction([FromBody] LogInteractionRequest request)
+        {
+            try
+            {
+                var log = new InteractionLog
+                {
+                    ResourceId = request.ResourceId,
+                    ParentId = request.ParentId,
+                    InteractionType = request.InteractionType,
+                    Status = request.Status,
+                    DurationSeconds = request.DurationSeconds,
+                    CreatedAt = GetIndiaTime() // Stores precise local time
+                };
+
+                _context.InteractionLogs.Add(log);
+                await _context.SaveChangesAsync();
+
+                return Ok(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = ex.Message });
+            }
+        }
+
+        [HttpGet("parent-history/{parentId}")]
+        public async Task<IActionResult> GetParentHistory(int parentId)
+        {
+            try
+            {
+                var history = await _context.InteractionLogs
+                    .Where(log => log.ParentId == parentId)
+                    .OrderByDescending(log => log.CreatedAt)
+                    .Select(log => new {
+                        interactionType = log.InteractionType,
+                        status = log.Status,
+                        durationSeconds = log.DurationSeconds,
+                        date = log.CreatedAt.ToString("dd MMM yyyy, hh:mm tt")
+                    })
+                    .ToListAsync();
+
+                return Ok(new { success = true, data = history });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = ex.Message });
             }
         }
 
@@ -217,6 +299,10 @@ namespace PwcApi.Controllers
                     CheckOutImage = a.CheckOutImage ?? "",
                     CheckInLocation = a.CheckInLocation ?? "",
                     CheckOutLocation = a.CheckOutLocation ?? "",
+                    
+                    Type = a.Type ?? "",                         // 🔥 Added to BC Sync
+                    AttendanceRemark = a.AttendanceRemark ?? "", // 🔥 Added to BC Sync
+                    
                     CreatedAt = a.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss")
                 });
 

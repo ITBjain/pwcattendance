@@ -34,5 +34,7 @@ namespace PwcApi.Models
         public int TotalWhatsApp { get; set; } = 0;
         public int TotalParentsTargeted { get; set; } = 0;
         public string? Remark { get; set; }
+        public string? Type { get; set;}
+        public string? AttendanceRemark { get; set;}
     }
 }

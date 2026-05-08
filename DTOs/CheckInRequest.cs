@@ -7,5 +7,7 @@ namespace PwcApi.DTOs
         public string SessionId { get; set; } = string.Empty;
         public string CheckInImage { get; set; } = string.Empty; 
         public string CheckInLocation { get; set; } = string.Empty;
+        public string Type { get; set; } = string.Empty; 
+        public string? AttendanceRemark { get; set; }
     }
 }

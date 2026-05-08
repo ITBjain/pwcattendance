@@ -58,5 +58,7 @@ namespace PwcApi.Models
         public string? ActivityCount { get; set; }
         public string? PromoCode { get; set; }
         public decimal? PromoDiscount { get; set; }
+        public string? Coordinates { get; set; }
+    
     }
 }
