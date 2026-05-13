@@ -41,5 +41,8 @@ namespace PwcApi.Models
         public string? DiscountCode { get; set; }
         public DateTime? CreatedAt { get; set; }
         public int? MediaConsent { get; set; }
+        public string? InterestLevel { get; set; }
+        public DateTime? FollowUpDate { get; set; }
+        public bool HasBeenContacted { get; set; } = false;
     }
 }

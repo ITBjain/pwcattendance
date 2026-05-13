@@ -285,6 +285,67 @@ namespace PwcApi.Controllers
             }
         }
 
+               [HttpPut("update-status")]
+        public async Task<IActionResult> UpdateParentStatus([FromBody] UpdateParentStatusRequest request)
+        {
+            try
+            {
+                // Parse the nullable date coming from Android
+                DateTime? parsedFollowUpDate = null;
+                if (!string.IsNullOrEmpty(request.FollowUpDate))
+                {
+                    // Fully qualified to avoid CS0103 errors if using directives are missing
+                    if (DateTime.TryParseExact(request.FollowUpDate, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out DateTime tempDate))
+                    {
+                        parsedFollowUpDate = tempDate;
+                    }
+                }
+
+                bool isUpdated = false;
+
+                // 1. First, check if the parent exists in the PotentialParents table
+                var potentialParent = await _context.Potential_Parents.FindAsync(request.ParentId);
+                if (potentialParent != null)
+                {
+                    potentialParent.InterestLevel = request.InterestLevel;
+                    potentialParent.FollowUpDate = parsedFollowUpDate;
+                    potentialParent.HasBeenContacted = true; // Mark as contacted
+
+                    _context.Potential_Parents.Update(potentialParent);
+                    isUpdated = true;
+                }
+                else
+                {
+                    // 2. If not found in Potential, check the ParentEnrollments table
+                    var enrolledParent = await _context.ParentsEnrollments.FindAsync(request.ParentId);
+                    if (enrolledParent != null)
+                    {
+                        enrolledParent.InterestLevel = request.InterestLevel;
+                        enrolledParent.FollowUpDate = parsedFollowUpDate;
+                        enrolledParent.HasBeenContacted = true; // Mark as contacted
+
+                        _context.ParentsEnrollments.Update(enrolledParent);
+                        isUpdated = true;
+                    }
+                }
+
+                // 3. If neither table had a matching ID, return a 404 Not Found
+                if (!isUpdated)
+                {
+                    return NotFound(new { success = false, message = "Parent not found in any database table." });
+                }
+
+                // Save the changes to whichever table was updated
+                await _context.SaveChangesAsync();
+
+                return Ok(new { success = true, message = "Status updated successfully." });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+    
         
     }
 }
