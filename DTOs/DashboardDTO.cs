@@ -63,5 +63,9 @@ namespace PwcApi.DTOs
         // Discount
         public decimal? DiscountAmount { get; set; }
         public string? DiscountCode { get; set; }
+        // 🔥 NEW FIELDS TO SEND BACK TO ANDROID:
+    public string? InterestLevel { get; set; }
+    public string? FollowUpDate { get; set; }
+    public bool HasBeenContacted { get; set; }
     }
 }

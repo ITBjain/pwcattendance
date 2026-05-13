@@ -230,7 +230,10 @@ namespace PwcApi.Controllers
                         Remark = p.Remark,
                         
                         // Enrollment fields default to null/empty for Potential parents
-                        PaymentStatus = "N/A" 
+                        PaymentStatus = "N/A",
+                          InterestLevel = p.InterestLevel,
+                        FollowUpDate = p.FollowUpDate.HasValue ? p.FollowUpDate.Value.ToString("yyyy-MM-dd HH:mm") : null,
+                        HasBeenContacted = p.HasBeenContacted
                     })
                     .ToListAsync();
 
@@ -270,7 +273,10 @@ namespace PwcApi.Controllers
                         
                         // Discounts
                         DiscountAmount = p.DiscountAmount,
-                        DiscountCode = p.DiscountCode
+                        DiscountCode = p.DiscountCode,
+                           InterestLevel = p.InterestLevel,
+                        FollowUpDate = p.FollowUpDate.HasValue ? p.FollowUpDate.Value.ToString("yyyy-MM-dd HH:mm") : null,
+                        HasBeenContacted = p.HasBeenContacted
                     })
                     .ToListAsync();
 
