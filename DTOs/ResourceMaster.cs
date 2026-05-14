@@ -20,5 +20,7 @@ namespace PwcApi.Models
         
         // 🔥 CHANGE THIS LINE: It must be a DateTime? because the DB uses a Date format
         public DateTime? DateOfJoining { get; set; } 
+
+        public string WhapiToken { get; set; } = string.Empty;
     }
 }
