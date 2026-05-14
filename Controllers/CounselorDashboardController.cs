@@ -355,7 +355,7 @@ public async Task<IActionResult> UpdateParentStatus([FromBody] UpdateParentStatu
     }
 }
 
-        [HttpPost("bulk-whatsapp")]
+[HttpPost("bulk-whatsapp")]
         public async Task<IActionResult> SendBulkWhatsApp([FromBody] BulkWhatsAppRequest request)
         {
             try
@@ -364,8 +364,8 @@ public async Task<IActionResult> UpdateParentStatus([FromBody] UpdateParentStatu
                 if (request.ParentIds == null || !request.ParentIds.Any())
                     return BadRequest(new { success = false, message = "No parents selected." });
 
-                if (string.IsNullOrWhiteSpace(request.Message))
-                    return BadRequest(new { success = false, message = "Message cannot be empty." });
+                if (string.IsNullOrWhiteSpace(request.Message) && string.IsNullOrWhiteSpace(request.MediaBase64))
+                    return BadRequest(new { success = false, message = "Either a Message or Media must be provided." });
 
                 // 2. Fetch the Counselor to get THEIR specific Whapi Token
                 var counselor = await _context.ResourceMasters.FindAsync(request.CounselorId);
@@ -386,7 +386,7 @@ public async Task<IActionResult> UpdateParentStatus([FromBody] UpdateParentStatu
                     .Select(p => p.Parent_Phone)
                     .ToListAsync();
 
-                // 4. Fetch phone numbers from Enrolled Parents (Matched to your ParentEnrollments table)
+                // 4. Fetch phone numbers from Enrolled Parents
                 var enrolledPhones = await _context.ParentsEnrollments
                     .Where(e => request.ParentIds.Contains(e.Id) && !string.IsNullOrEmpty(e.ParentPhone))
                     .Select(e => e.ParentPhone)
@@ -394,47 +394,62 @@ public async Task<IActionResult> UpdateParentStatus([FromBody] UpdateParentStatu
 
                 // Combine and remove any duplicate numbers
                 var allPhoneNumbers = potentialPhones.Concat(enrolledPhones).Distinct().ToList();
+                int totalAttempted = allPhoneNumbers.Count;
 
-                if (!allPhoneNumbers.Any())
+                if (totalAttempted == 0)
                     return BadRequest(new { success = false, message = "No valid phone numbers found for the selected parents." });
 
-                // 5. Setup Whapi.Cloud HTTP Client
-                string whapiUrl =  "https://gate.whapi.cloud/messages/text";       //"https://panel.whapi.cloud/api/messages/text";
+                // 5. Determine Whapi Endpoint Type (text, image, document, video)
+                string endpointType = string.IsNullOrWhiteSpace(request.MediaType) ? "text" : request.MediaType.ToLower();
+                string whapiUrl = $"https://gate.whapi.cloud/messages/{endpointType}";  //https://gate.whapi.cloud/messages/text
+
+                // 6. Setup Whapi.Cloud HTTP Client
                 using var httpClient = new HttpClient();
-                
-                // Whapi uses Bearer Authentication
                 httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {whapiToken}");
                 httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
                 int successCount = 0;
                 int failCount = 0;
 
-                // 6. Loop through each number and dispatch via Whapi
+                // 7. Loop through each number and dispatch via Whapi
                 foreach (var rawPhone in allPhoneNumbers)
                 {
                     if (string.IsNullOrWhiteSpace(rawPhone)) continue;
 
                     // Clean phone number: Whapi requires country code, NO '+' sign
-                    // Example: +91 999 999 9999 becomes 919999999999
                     string cleanPhone = new string(rawPhone.Where(char.IsDigit).ToArray());
                     
-                    // If the number is exactly 10 digits, assume it's Indian and prepend '91'
                     if (cleanPhone.Length == 10) 
                     {
                         cleanPhone = "91" + cleanPhone; 
                     }
 
-                    // Create the Whapi JSON Payload
-                    var payload = new
+                    // Create the Whapi JSON Payload dynamically based on if it has media
+                    var payload = new Dictionary<string, object>
                     {
-                        to = cleanPhone,
-                        body = request.Message
+                        { "to", cleanPhone }
                     };
+
+                    if (endpointType == "text")
+                    {
+                        payload.Add("body", request.Message);
+                    }
+                    else
+                    {
+                        // For image, video, or document
+                        payload.Add("media", request.MediaBase64);
+                        if (!string.IsNullOrWhiteSpace(request.Message))
+                        {
+                            payload.Add("caption", request.Message);
+                        }
+                        if (!string.IsNullOrWhiteSpace(request.FileName))
+                        {
+                            payload.Add("file_name", request.FileName);
+                        }
+                    }
 
                     string jsonPayload = JsonSerializer.Serialize(payload);
                     var content = new StringContent(jsonPayload, Encoding.UTF8);
-                    
-                    // Strictly typing MediaTypeHeaderValue for C# strict compilers
                     content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
 
                     // Execute the POST request to Whapi
@@ -447,25 +462,136 @@ public async Task<IActionResult> UpdateParentStatus([FromBody] UpdateParentStatu
                     else
                     {
                         failCount++;
-                        // Optional: Log response.Content.ReadAsStringAsync() to your server console here for debugging failed sends
+                        // Log response.Content.ReadAsStringAsync() for specific Whapi errors if needed
                     }
                 }
 
-                // 7. Return the final result to the Android App
-                if (successCount > 0)
-                {
-                    return Ok(new { success = true, message = $"Sent {successCount} messages from your phone! {failCount} failed." });
-                }
-                else
-                {
-                    return BadRequest(new { success = false, message = "Whapi rejected the messages. Check if your phone is online and linked." });
-                }
+                // 8. Return Detailed Statistics to Android UI
+                return Ok(new { 
+                    success = true, 
+                    message = $"Dispatched {successCount} out of {totalAttempted} messages successfully.",
+                    successCount = successCount,
+                    failCount = failCount,
+                    totalAttempted = totalAttempted
+                });
             }
             catch (Exception ex)
             {
                 return StatusCode(500, new { success = false, message = "Internal Server Error: " + ex.Message });
             }
         }
+
+        // [HttpPost("bulk-whatsapp")]
+        // public async Task<IActionResult> SendBulkWhatsApp([FromBody] BulkWhatsAppRequest request)
+        // {
+        //     try
+        //     {
+        //         // 1. Validate the incoming request from Android
+        //         if (request.ParentIds == null || !request.ParentIds.Any())
+        //             return BadRequest(new { success = false, message = "No parents selected." });
+
+        //         if (string.IsNullOrWhiteSpace(request.Message))
+        //             return BadRequest(new { success = false, message = "Message cannot be empty." });
+
+        //         // 2. Fetch the Counselor to get THEIR specific Whapi Token
+        //         var counselor = await _context.ResourceMasters.FindAsync(request.CounselorId);
+                
+        //         if (counselor == null)
+        //             return NotFound(new { success = false, message = "Counselor not found in the system." });
+
+        //         string whapiToken = counselor.WhapiToken;
+
+        //         if (string.IsNullOrEmpty(whapiToken))
+        //         {
+        //             return BadRequest(new { success = false, message = "This counselor has not linked their WhatsApp via Whapi yet." });
+        //         }
+
+        //         // 3. Fetch phone numbers from Potential Parents
+        //         var potentialPhones = await _context.Potential_Parents
+        //             .Where(p => request.ParentIds.Contains(p.Id) && !string.IsNullOrEmpty(p.Parent_Phone))
+        //             .Select(p => p.Parent_Phone)
+        //             .ToListAsync();
+
+        //         // 4. Fetch phone numbers from Enrolled Parents (Matched to your ParentEnrollments table)
+        //         var enrolledPhones = await _context.ParentsEnrollments
+        //             .Where(e => request.ParentIds.Contains(e.Id) && !string.IsNullOrEmpty(e.ParentPhone))
+        //             .Select(e => e.ParentPhone)
+        //             .ToListAsync();
+
+        //         // Combine and remove any duplicate numbers
+        //         var allPhoneNumbers = potentialPhones.Concat(enrolledPhones).Distinct().ToList();
+
+        //         if (!allPhoneNumbers.Any())
+        //             return BadRequest(new { success = false, message = "No valid phone numbers found for the selected parents." });
+
+        //         // 5. Setup Whapi.Cloud HTTP Client
+        //         string whapiUrl =  "https://gate.whapi.cloud/messages/text";       //"https://panel.whapi.cloud/api/messages/text";
+        //         using var httpClient = new HttpClient();
+                
+        //         // Whapi uses Bearer Authentication
+        //         httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {whapiToken}");
+        //         httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        //         int successCount = 0;
+        //         int failCount = 0;
+
+        //         // 6. Loop through each number and dispatch via Whapi
+        //         foreach (var rawPhone in allPhoneNumbers)
+        //         {
+        //             if (string.IsNullOrWhiteSpace(rawPhone)) continue;
+
+        //             // Clean phone number: Whapi requires country code, NO '+' sign
+        //             // Example: +91 999 999 9999 becomes 919999999999
+        //             string cleanPhone = new string(rawPhone.Where(char.IsDigit).ToArray());
+                    
+        //             // If the number is exactly 10 digits, assume it's Indian and prepend '91'
+        //             if (cleanPhone.Length == 10) 
+        //             {
+        //                 cleanPhone = "91" + cleanPhone; 
+        //             }
+
+        //             // Create the Whapi JSON Payload
+        //             var payload = new
+        //             {
+        //                 to = cleanPhone,
+        //                 body = request.Message
+        //             };
+
+        //             string jsonPayload = JsonSerializer.Serialize(payload);
+        //             var content = new StringContent(jsonPayload, Encoding.UTF8);
+                    
+        //             // Strictly typing MediaTypeHeaderValue for C# strict compilers
+        //             content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+
+        //             // Execute the POST request to Whapi
+        //             var response = await httpClient.PostAsync(whapiUrl, content);
+
+        //             if (response.IsSuccessStatusCode)
+        //             {
+        //                 successCount++;
+        //             }
+        //             else
+        //             {
+        //                 failCount++;
+        //                 // Optional: Log response.Content.ReadAsStringAsync() to your server console here for debugging failed sends
+        //             }
+        //         }
+
+        //         // 7. Return the final result to the Android App
+        //         if (successCount > 0)
+        //         {
+        //             return Ok(new { success = true, message = $"Sent {successCount} messages from your phone! {failCount} failed." });
+        //         }
+        //         else
+        //         {
+        //             return BadRequest(new { success = false, message = "Whapi rejected the messages. Check if your phone is online and linked." });
+        //         }
+        //     }
+        //     catch (Exception ex)
+        //     {
+        //         return StatusCode(500, new { success = false, message = "Internal Server Error: " + ex.Message });
+        //     }
+        // }
     }
 
 //     // Data Transfer Object that perfectly matches the Android App's JSON payload
