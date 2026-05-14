@@ -401,7 +401,7 @@ public async Task<IActionResult> UpdateParentStatus([FromBody] UpdateParentStatu
 
                 // 5. Determine Whapi Endpoint Type (text, image, document, video)
                 string endpointType = string.IsNullOrWhiteSpace(request.MediaType) ? "text" : request.MediaType.ToLower();
-                string whapiUrl = $"https://gate.whapi.cloud/messages/{endpointType}";  //https://gate.whapi.cloud/messages/text
+                string whapiUrl = $"https://gate.whapi.cloud/messages/{endpointType}";  //https://gate.whapi.cloud/messages/text. https://gate.whapi.cloud/
 
                 // 6. Setup Whapi.Cloud HTTP Client
                 using var httpClient = new HttpClient();
