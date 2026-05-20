@@ -123,3 +123,11 @@
 /Users/bjain/vsProjects/PWC/PwcApi/obj/Debug/net10.0/PwcApi.pdb
 /Users/bjain/vsProjects/PWC/PwcApi/obj/Debug/net10.0/PwcApi.genruntimeconfig.cache
 /Users/bjain/vsProjects/PWC/PwcApi/obj/Debug/net10.0/ref/PwcApi.dll
+/Users/bjain/vsProjects/PWC/PwcApi/bin/Debug/net10.0/Newtonsoft.Json.dll
+/Users/bjain/vsProjects/PWC/PwcApi/bin/Debug/net10.0/DTOs/develop/flutter_application_1/build/flutter_assets/AssetManifest.bin.json
+/Users/bjain/vsProjects/PWC/PwcApi/bin/Debug/net10.0/DTOs/develop/flutter_application_1/build/flutter_assets/FontManifest.json
+/Users/bjain/vsProjects/PWC/PwcApi/bin/Debug/net10.0/DTOs/develop/flutter_application_1/build/ios/SourcePackages/workspace-state.json
+/Users/bjain/vsProjects/PWC/PwcApi/bin/Debug/net10.0/DTOs/develop/flutter_application_1/ios/Runner/Assets.xcassets/AppIcon.appiconset/Contents.json
+/Users/bjain/vsProjects/PWC/PwcApi/bin/Debug/net10.0/DTOs/develop/flutter_application_1/ios/Runner/Assets.xcassets/LaunchImage.imageset/Contents.json
+/Users/bjain/vsProjects/PWC/PwcApi/bin/Debug/net10.0/DTOs/develop/flutter_application_1/macos/Runner/Assets.xcassets/AppIcon.appiconset/Contents.json
+/Users/bjain/vsProjects/PWC/PwcApi/bin/Debug/net10.0/DTOs/develop/flutter_application_1/web/manifest.json

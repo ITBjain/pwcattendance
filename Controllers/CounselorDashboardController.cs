@@ -40,9 +40,9 @@ namespace PwcApi.Controllers
                 return BadRequest(new { message = $"DEBUG: Password mismatch. DB has '{counselor.Password}', you sent '{request.Password}'." });
             }
 
-            if (counselor.Role != "Counselor") 
+            if (counselor.Role != "Counselor" && counselor.Role != "Coach") 
             {
-                return BadRequest(new { message = $"DEBUG: Role mismatch. Expected 'Counselor', DB has '{counselor.Role}'." });
+                return BadRequest(new { message = $"DEBUG: Role mismatch. Expected 'Counselor or Coach', DB has '{counselor.Role}'." });
             }
 
             if (counselor.IsActive != 1) 
