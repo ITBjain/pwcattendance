@@ -5,6 +5,7 @@ using PwcApi.DTOs;
 using System.Net.Http.Headers;
 using System.Text;             
 using System.Text.Json;  
+using PwcApi.Models;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -57,6 +58,55 @@ namespace PwcApi.Controllers
             });
         }
 
+     [HttpPost("add-lead")]
+public async Task<IActionResult> AddPotentialLead([FromBody] AddLeadRequest request)
+{
+    try
+    {
+        var newLead = new PotentialParent 
+        {
+            School_Name = request.SchoolId,
+            Parent_Name = request.ParentName,
+            Parent_Email = request.ParentEmail,
+            Parent_Phone = request.ParentPhone,
+            Child_Name = request.ChildName,
+            Child_DOB = string.IsNullOrWhiteSpace(request.ChildDOB) ? null : DateTime.Parse(request.ChildDOB),
+            InterestLevel = "Moderate",
+            HasBeenContacted = false,
+            CreatedAt = DateTime.UtcNow,
+            
+            // 🔥 FIX: Explicitly set MediaConsent to 0 (or 1) to satisfy NOT NULL constraint
+            MediaConsent = 0 
+        };
+
+        _context.Potential_Parents.Add(newLead);
+        await _context.SaveChangesAsync();
+
+        return Ok(new { success = true, message = "Lead added successfully." });
+    }
+    catch (DbUpdateException ex)
+    {
+        var innerEx = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
+        return StatusCode(500, new { success = false, message = "Database Error: " + innerEx });
+    }
+    catch (Exception ex)
+    {
+        return StatusCode(500, new { success = false, message = "General Error: " + ex.Message });
+    }
+}
+
+// Add this Request DTO at the bottom of the file
+// 🔥 FIX: Added '?' to explicitly allow nullable strings and fix the CS8618 warnings
+    public class AddLeadRequest 
+    {
+        public string? SchoolId { get; set; }
+        public int CounselorId { get; set; }
+        public string? ParentName { get; set; }
+        public string? ParentEmail { get; set; }
+        public string? ParentPhone { get; set; }
+        public string? ChildName { get; set; }
+        public string? ChildDOB { get; set; }
+    }
         // ==========================================
         // 🔥 NEW: GET COUNSELOR PROFILE ENDPOINT
         // ==========================================
