@@ -93,10 +93,12 @@ namespace PwcApi.Controllers
 
                 return Ok(new { message = "Check-in successful", recordId = attendanceRecord.Id });
             }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { message = $"Backend Crash: {ex.Message}" });
-            }
+            // 👉 This is C# code. Put this in your .NET Backend!
+catch (Exception ex)
+{
+    var actualError = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
+    return StatusCode(500, new { message = $"Backend Crash: {actualError}" });
+}
         }
 
         [HttpPost("sync-activity")]
