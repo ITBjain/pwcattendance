@@ -29,7 +29,7 @@ namespace PwcApi.Models
         public string? BillingState { get; set; }
         
         // Session Info
-        public int? SessionId { get; set; }
+        public int SessionId { get; set; }
         public string? SessionName { get; set; }
         public string? SessionAgeGroup { get; set; }
         public string? SessionDays { get; set; }
@@ -44,5 +44,6 @@ namespace PwcApi.Models
         public string? InterestLevel { get; set; }
         public DateTime? FollowUpDate { get; set; }
         public bool HasBeenContacted { get; set; } = false;
+        public int? GroupVariationId { get; set; }
     }
 }

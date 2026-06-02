@@ -72,10 +72,9 @@ namespace PwcApi.Controllers
                 var attendanceRecord = new ResourceAttendance
                 {
                     ResourceId = resourceIdInt,   
-                    SchoolId = request.SchoolId,  
-                    CheckInDate = indiaTime.Date,
-                    CheckInTime = indiaTime.TimeOfDay, 
-                    CheckInImage = imageUrl, 
+                    CheckInTime = indiaTime.TimeOfDay,                     SchoolId = string.IsNullOrWhiteSpace(request.SchoolId) ? null : request.SchoolId, // 🔥 Force it to null if empty                    CheckInDate = indiaTime.Date,
+
+                    CheckInImage = imageUrl ?? "",
                     CheckInLocation = request.CheckInLocation,
                     
                     // 🔥 NEW: Store Attendance Type and Remark
@@ -315,6 +314,43 @@ catch (Exception ex)
                 return StatusCode(500, new { message = $"BC Sync Error: {ex.Message}" });
             }
         }
+
+        [HttpGet("coach/{coachId}/active-batches")]
+public async Task<IActionResult> GetActiveBatches(string coachId)
+{
+    var today = DateTime.UtcNow.Date;
+
+    // Get Active Sessions for this Coach
+    var activeSessionIds = await _context.SessionMasters
+        .Where(s => s.CoachId == coachId && s.IsActive == 1)
+        .Select(s => s.Id)
+        .ToListAsync();
+
+    // Fetch Batches and include today's attendance status
+    var batches = await _context.GroupVariations
+        .Where(gv => activeSessionIds.Contains(gv.SessionId))
+        .Select(gv => new
+        {
+            BatchId = gv.Id,
+            AgeGroup = gv.AgeGroup,
+            Timing = gv.TimeSlot,
+            Days = gv.Days,
+            Children = _context.ParentsEnrollments
+                .Where(pe => pe.GroupVariationId == gv.Id)
+                .Select(pe => new
+                {
+                    EnrollmentId = pe.Id,
+                    ChildName = pe.ChildName,
+                    ParentPhone = pe.ParentPhone,
+                    ParentEmail = pe.ParentEmail,
+                    // Check if they are already marked present today
+                    TodayAttendance = _context.ChildAttendances
+                        .FirstOrDefault(a => a.ChildEnrollmentId == pe.Id && a.AttendanceDate == today)
+                }).ToList()
+        }).ToListAsync();
+
+    return Ok(batches);
+}
     }
 }
 

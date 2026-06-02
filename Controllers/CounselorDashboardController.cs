@@ -6,6 +6,7 @@ using System.Net.Http.Headers;
 using System.Text;             
 using System.Text.Json;  
 using PwcApi.Models;
+using PwcApi.Services; 
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -18,11 +19,48 @@ namespace PwcApi.Controllers
     public class CounselorDashboardController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly R2StorageService _r2Service;
 
-        public CounselorDashboardController(AppDbContext context)
+        // 🔥 FIX: Added R2StorageService here and assigned it!
+        public CounselorDashboardController(AppDbContext context, R2StorageService r2Service)
         {
             _context = context;
+            _r2Service = r2Service;
         }
+
+        [HttpPost("reports/send")]
+        public async Task<IActionResult> SendParentReport([FromBody] SendReportRequest req)
+        {
+            // 1. Upload Media (if present)
+            string? mediaUrl = null;
+            if (!string.IsNullOrEmpty(req.ImageBase64)) {
+                mediaUrl = await _r2Service.UploadBase64ImageAsync(req.ImageBase64, $"report_{req.EnrollmentId}_{DateTime.UtcNow.Ticks}");
+            }
+
+            // 2. Save Report to Database
+            var report = new ChildReport {
+                ChildEnrollmentId = req.EnrollmentId,
+                GroupVariationId = req.BatchId,
+                ReportDate = DateTime.UtcNow.Date,
+                TeacherNotes = req.Notes,
+                MediaUrl = mediaUrl,
+                SentViaWhatsApp = req.SendWhatsApp,
+                SentViaEmail = req.SendEmail
+            };
+            _context.ChildReports.Add(report);
+            await _context.SaveChangesAsync();
+
+            // 3. Trigger External APIs (Pseudo-code)
+            if (req.SendWhatsApp) {
+                // await _whatsappService.SendMessage(req.ParentPhone, req.Notes, mediaUrl);
+            }
+            if (req.SendEmail) {
+                // await _emailService.SendEmail(req.ParentEmail, "Daily Update from PWC", req.Notes, mediaUrl);
+            }
+
+            return Ok(new { success = true });
+        }
+    
 
         // POST: api/counselordashboard/login
         [HttpPost("login")]
@@ -404,6 +442,37 @@ public async Task<IActionResult> UpdateParentStatus([FromBody] UpdateParentStatu
         return StatusCode(500, new { success = false, message = ex.Message });
     }
 }
+
+[HttpGet("coach/{coachId}/batches")]
+public async Task<IActionResult> GetCoachBatches(string coachId)
+{
+    // 1. Get all sessions taught by this coach
+    var sessionIds = await _context.SessionMasters
+        .Where(sm => sm.CoachId == coachId)
+        .Select(sm => sm.Id)
+        .ToListAsync();
+
+    // 2. Get all children enrolled in those sessions
+    var enrolledKids = await _context.ParentsEnrollments
+        .Where(pe => sessionIds.Contains(pe.SessionId))
+        .ToListAsync();
+
+    // 3. Group the children into "Batches" based on the text strings
+    var batches = enrolledKids
+        .GroupBy(pe => new { pe.SessionAgeGroup, pe.SessionTimeSlot, pe.SessionDays })
+        .Select(group => new 
+        {
+            AgeGroup = group.Key.SessionAgeGroup,
+            Timing = group.Key.SessionTimeSlot,
+            Days = group.Key.SessionDays,
+            TotalEnrolled = group.Count(),
+            Children = group.Select(k => new { k.ChildName, k.ParentName, k.ParentPhone }).ToList()
+        });
+
+    return Ok(batches);
+}
+
+
 [HttpPost("bulk-whatsapp")]
         public async Task<IActionResult> SendBulkWhatsApp([FromBody] BulkWhatsAppRequest request)
         {
@@ -530,7 +599,70 @@ public async Task<IActionResult> UpdateParentStatus([FromBody] UpdateParentStatu
                 return StatusCode(500, new { success = false, message = "Internal Server Error: " + ex.Message });
             }
         }
+
+        [HttpPost("attendance/mark-child")]
+public async Task<IActionResult> MarkChildAttendance([FromBody] MarkChildAttendanceRequest req)
+{
+    var today = DateTime.UtcNow.Date;
+    var timeNow = DateTime.UtcNow.TimeOfDay; // Convert to IST as needed
+
+    var record = await _context.ChildAttendances
+        .FirstOrDefaultAsync(a => a.ChildEnrollmentId == req.EnrollmentId && a.AttendanceDate == today);
+
+    if (record == null)
+    {
+        // First punch of the day (Check In or Absent)
+        record = new ChildAttendance
+        {
+            ChildEnrollmentId = req.EnrollmentId,
+            GroupVariationId = req.BatchId,
+            AttendanceDate = today,
+            IsPresent = req.Action == "IN" ? true : false,
+            CheckInTime = req.Action == "IN" ? timeNow : null
+        };
+        _context.ChildAttendances.Add(record);
     }
+    else if (req.Action == "OUT")
+    {
+        // Second punch (Check out)
+        record.CheckOutTime = timeNow;
+    }
+
+    await _context.SaveChangesAsync();
+    return Ok(new { success = true, message = "Attendance updated" });
+}
+
+
+[HttpGet("batch/{batchId}/attendance-history")]
+public async Task<IActionResult> GetBatchAttendanceHistory(int batchId)
+{
+    var batchHistory = await _context.GroupVariations
+        .Include(gv => gv.ChildAttendances) // 🔥 Automatically joins the ChildAttendances table!
+        .Where(gv => gv.Id == batchId)
+        .Select(gv => new 
+        {
+            BatchName = $"{gv.AgeGroup} ({gv.Days})",
+            Time = gv.TimeSlot,
+            TotalLogs = gv.ChildAttendances.Count(),
+            AttendanceRecords = gv.ChildAttendances.Select(a => new 
+            {
+                Date = a.AttendanceDate.ToString("yyyy-MM-dd"),
+                IsPresent = a.IsPresent,
+                CheckIn = a.CheckInTime,
+                ChildId = a.ChildEnrollmentId
+            }).ToList()
+        })
+        .FirstOrDefaultAsync();
+
+    if (batchHistory == null) return NotFound("Batch not found");
+
+    return Ok(batchHistory);
+}
+
+        
+    }
+
+    
 //     // Data Transfer Object that perfectly matches the Android App's JSON payload
 //     public class BulkWhatsAppRequest
 //     {
