@@ -5,7 +5,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace PwcApi.Models
 {
-        [Table("GroupaVariations")]
+        [Table("GroupVariations")]
 public class GroupVariation
     {
         [Key]

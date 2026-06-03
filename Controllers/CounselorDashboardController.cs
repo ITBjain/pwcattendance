@@ -443,34 +443,105 @@ public async Task<IActionResult> UpdateParentStatus([FromBody] UpdateParentStatu
     }
 }
 
+
 [HttpGet("coach/{coachId}/batches")]
 public async Task<IActionResult> GetCoachBatches(string coachId)
 {
+    var today = DateTime.UtcNow.Date;
+
     // 1. Get all sessions taught by this coach
     var sessionIds = await _context.SessionMasters
         .Where(sm => sm.CoachId == coachId)
         .Select(sm => sm.Id)
         .ToListAsync();
 
-    // 2. Get all children enrolled in those sessions
-    var enrolledKids = await _context.ParentsEnrollments
-        .Where(pe => sessionIds.Contains(pe.SessionId))
+    if (!sessionIds.Any()) return Ok(new List<object>());
+
+    // 2. Fetch the Batches (GroupVariations)
+    var batches = await _context.GroupVariations
+        .Where(gv => sessionIds.Contains(gv.SessionId))
         .ToListAsync();
 
-    // 3. Group the children into "Batches" based on the text strings
-    var batches = enrolledKids
-        .GroupBy(pe => new { pe.SessionAgeGroup, pe.SessionTimeSlot, pe.SessionDays })
-        .Select(group => new 
-        {
-            AgeGroup = group.Key.SessionAgeGroup,
-            Timing = group.Key.SessionTimeSlot,
-            Days = group.Key.SessionDays,
-            TotalEnrolled = group.Count(),
-            Children = group.Select(k => new { k.ChildName, k.ParentName, k.ParentPhone }).ToList()
-        });
+    var batchIds = batches.Select(b => b.Id).ToList();
 
-    return Ok(batches);
+    // 3. Fetch the Children for those Batches
+    var children = await _context.ParentsEnrollments
+        .Where(pe => pe.GroupVariationId != null && batchIds.Contains(pe.GroupVariationId.Value))
+        .ToListAsync();
+
+    var childIds = children.Select(c => c.Id).ToList();
+
+    // 4. Fetch Today's Attendance for those Children
+    var todayAttendances = await _context.ChildAttendances
+        .Where(a => childIds.Contains(a.ChildEnrollmentId) && a.AttendanceDate == today)
+        .ToListAsync();
+
+    // 5. Stitch it all together in memory (This bypasses the MySQL syntax error!)
+    var result = batches.Select(gv => new 
+    {
+        BatchId = gv.Id,
+        AgeGroup = gv.AgeGroup,
+        Timing = gv.TimeSlot,
+        Days = gv.Days,
+        TotalEnrolled = children.Count(pe => pe.GroupVariationId == gv.Id),
+        
+        Children = children
+            .Where(pe => pe.GroupVariationId == gv.Id)
+            .Select(child => 
+            {
+                // Find attendance for this specific child
+                var attendance = todayAttendances.FirstOrDefault(a => a.ChildEnrollmentId == child.Id);
+
+                return new 
+                { 
+                    EnrollmentId = child.Id, 
+                    BatchId = gv.Id, 
+                    ChildName = child.ChildName, 
+                    ParentName = child.ParentName, 
+                    ParentPhone = child.ParentPhone,
+                    ParentEmail = child.ParentEmail,
+                    
+                    TodayAttendance = attendance == null ? null : new 
+                    {
+                        Id = attendance.Id,
+                        IsPresent = attendance.IsPresent,
+                        CheckInTime = attendance.CheckInTime?.ToString(@"hh\:mm\:ss"), // Safely format timespan
+                        CheckOutTime = attendance.CheckOutTime?.ToString(@"hh\:mm\:ss")
+                    }
+                };
+            }).ToList()
+    }).ToList();
+
+    return Ok(result);
 }
+// [HttpGet("coach/{coachId}/batches")]
+// public async Task<IActionResult> GetCoachBatches(string coachId)
+// {
+//     // 1. Get all sessions taught by this coach
+//     var sessionIds = await _context.SessionMasters
+//         .Where(sm => sm.CoachId == coachId)
+//         .Select(sm => sm.Id)
+//         .ToListAsync();
+
+//     // 2. Get all children enrolled in those sessions
+//     var enrolledKids = await _context.ParentsEnrollments
+//         .Where(pe => sessionIds.Contains(pe.SessionId))
+//         .ToListAsync();
+
+//     // 3. Group the children into "Batches" based on the text strings
+//     var batches = enrolledKids
+//         .GroupBy(pe => new { pe.SessionAgeGroup, pe.SessionTimeSlot, pe.SessionDays })
+//         .Select(group => new 
+//         {
+//             AgeGroup = group.Key.SessionAgeGroup,
+//             Timing = group.Key.SessionTimeSlot,
+//             Days = group.Key.SessionDays,
+//             TotalEnrolled = group.Count(),
+//             Children = group.Select(k => new { k.ChildName, k.ParentName, k.ParentPhone }).ToList()
+//         });
+
+//     return Ok(batches);
+// }
 
 
 [HttpPost("bulk-whatsapp")]
