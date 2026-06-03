@@ -443,73 +443,88 @@ public async Task<IActionResult> UpdateParentStatus([FromBody] UpdateParentStatu
     }
 }
 
-
 [HttpGet("coach/{coachId}/batches")]
-public async Task<IActionResult> GetCoachBatches(string coachId)
+public async Task<IActionResult> GetCoachBatches(string coachId) 
 {
     var today = DateTime.UtcNow.Date;
 
     // 1. Get all sessions taught by this coach
-    var sessionIds = await _context.SessionMasters
-        .Where(sm => sm.CoachId == coachId)
-        .Select(sm => sm.Id)
+    var sessionMasters = await _context.SessionMasters
+        .Where(sm => sm.CoachId == coachId) // Now comparing int to int!
         .ToListAsync();
 
+    var sessionIds = sessionMasters.Select(sm => sm.Id).ToList();
     if (!sessionIds.Any()) return Ok(new List<object>());
 
-    // 2. Fetch the Batches (GroupVariations)
+    // 2. Fetch the actual Schools (Centres) linked to those sessions
+    var schoolIds = sessionMasters.Select(sm => sm.SchoolId).Distinct().ToList();
+    var schools = await _context.SchoolMaster
+        .Where(s => schoolIds.Contains(s.SchoolId))
+        .ToListAsync();
+
+    // 3. Fetch the Batches (GroupVariations)
     var batches = await _context.GroupVariations
         .Where(gv => sessionIds.Contains(gv.SessionId))
         .ToListAsync();
 
     var batchIds = batches.Select(b => b.Id).ToList();
 
-    // 3. Fetch the Children for those Batches
+    // 4. Fetch the Children for those Batches
     var children = await _context.ParentsEnrollments
         .Where(pe => pe.GroupVariationId != null && batchIds.Contains(pe.GroupVariationId.Value))
         .ToListAsync();
 
     var childIds = children.Select(c => c.Id).ToList();
 
-    // 4. Fetch Today's Attendance for those Children
+    // 5. Fetch Today's Attendance for those Children
     var todayAttendances = await _context.ChildAttendances
         .Where(a => childIds.Contains(a.ChildEnrollmentId) && a.AttendanceDate == today)
         .ToListAsync();
 
-    // 5. Stitch it all together in memory (This bypasses the MySQL syntax error!)
-    var result = batches.Select(gv => new 
+    // 6. Stitch it all together in memory with REAL Data
+    var result = batches.Select(gv => 
     {
-        BatchId = gv.Id,
-        AgeGroup = gv.AgeGroup,
-        Timing = gv.TimeSlot,
-        Days = gv.Days,
-        TotalEnrolled = children.Count(pe => pe.GroupVariationId == gv.Id),
-        
-        Children = children
-            .Where(pe => pe.GroupVariationId == gv.Id)
-            .Select(child => 
-            {
-                // Find attendance for this specific child
-                var attendance = todayAttendances.FirstOrDefault(a => a.ChildEnrollmentId == child.Id);
+        // Find the Session and School tied to this specific batch
+        var session = sessionMasters.FirstOrDefault(sm => sm.Id == gv.SessionId);
+        var school = schools.FirstOrDefault(s => s.SchoolId == session?.SchoolId);
 
-                return new 
-                { 
-                    EnrollmentId = child.Id, 
-                    BatchId = gv.Id, 
-                    ChildName = child.ChildName, 
-                    ParentName = child.ParentName, 
-                    ParentPhone = child.ParentPhone,
-                    ParentEmail = child.ParentEmail,
-                    
-                    TodayAttendance = attendance == null ? null : new 
-                    {
-                        Id = attendance.Id,
-                        IsPresent = attendance.IsPresent,
-                        CheckInTime = attendance.CheckInTime?.ToString(@"hh\:mm\:ss"), // Safely format timespan
-                        CheckOutTime = attendance.CheckOutTime?.ToString(@"hh\:mm\:ss")
-                    }
-                };
-            }).ToList()
+        return new 
+        {
+            BatchId = gv.Id,
+            AgeGroup = gv.AgeGroup,
+            Timing = gv.TimeSlot,
+            Days = gv.Days,
+            TotalEnrolled = children.Count(pe => pe.GroupVariationId == gv.Id),
+            
+            // 🔥 REAL DATABASE VALUES INJECTED HERE
+            CentreName = school?.SchoolName ?? "Unknown Centre",
+            CentreAddress = $"{school?.SchoolAddress}, {school?.SchoolCity}",
+            Status = "UPCOMING", // By default, it awaits the coach to hit "Start"
+            
+            Children = children
+                .Where(pe => pe.GroupVariationId == gv.Id)
+                .Select(child => 
+                {
+                    var attendance = todayAttendances.FirstOrDefault(a => a.ChildEnrollmentId == child.Id);
+                    return new 
+                    { 
+                        EnrollmentId = child.Id, 
+                        BatchId = gv.Id, 
+                        ChildName = child.ChildName, 
+                        ParentName = child.ParentName, 
+                        ParentPhone = child.ParentPhone,
+                        ParentEmail = child.ParentEmail,
+                        
+                        TodayAttendance = attendance == null ? null : new 
+                        {
+                            Id = attendance.Id,
+                            IsPresent = attendance.IsPresent,
+                            CheckInTime = attendance.CheckInTime?.ToString(@"hh\:mm\:ss"),
+                            CheckOutTime = attendance.CheckOutTime?.ToString(@"hh\:mm\:ss")
+                        }
+                    };
+                }).ToList()
+        };
     }).ToList();
 
     return Ok(result);

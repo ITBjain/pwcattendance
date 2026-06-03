@@ -34,5 +34,16 @@ namespace PwcApi.Data
             .WithMany(g => g.ChildAttendances)
             .HasForeignKey(a => a.GroupVariationId)
             .OnDelete(DeleteBehavior.Cascade); // If a batch is deleted, its attendance logs are deleted
-    }    }
+
+            // 🔥 Add this conversion rule for SessionMaster
+    modelBuilder.Entity<SessionMaster>()
+        .Property(s => s.CoachId)
+        .HasConversion(
+            v => string.IsNullOrEmpty(v) ? 0 : int.Parse(v), // Convert C# String to DB Int
+            v => v.ToString()                                // Convert DB Int to C# String
+        );
+    }  
+    
+    
+      }
 }
