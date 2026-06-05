@@ -155,7 +155,7 @@ public async Task<IActionResult> AddPotentialLead([FromBody] AddLeadRequest requ
         public async Task<IActionResult> GetProfile(int counselorId)
         {
             var counselor = await _context.ResourceMasters
-                .FirstOrDefaultAsync(r => r.Id == counselorId && r.Role == "Counselor");
+                .FirstOrDefaultAsync(r => r.Id == counselorId && (r.Role == "Counselor" || r.Role == "Coach"));
 
             if (counselor == null)
             {
@@ -774,6 +774,8 @@ public async Task<IActionResult> FinalizeBatch([FromBody] FinalizeBatchRequest r
         message = "Session finalized and remarks saved successfully." 
     });
 }
+
+
 
         
     }

@@ -36,70 +36,135 @@ namespace PwcApi.Controllers
             }
         }
 
-        [HttpPost("checkin")]
-        public async Task<IActionResult> CheckIn([FromBody] CheckInRequest request)
-        {
-            try 
-            {
-                if (request == null) return BadRequest(new { message = "Invalid payload" });
-
-                if (!int.TryParse(request.CoachId, out int resourceIdInt))
-                    return BadRequest(new { message = "Invalid Coach ID format. Must be a number." });
-
-                var resourceExists = await _context.ResourceMasters.AnyAsync(r => r.Id == resourceIdInt);
-                if (!resourceExists) return NotFound(new { message = $"Counselor with ID {request.CoachId} does not exist." });
-
-                var existingSession = await _context.ResourceAttendances
-                    .FirstOrDefaultAsync(a => a.ResourceId == resourceIdInt && a.CheckOutTime == null);
-
-                if (existingSession != null) return Conflict(new { message = "You are already checked in. Please check out first." });
-
-                string cleanBase64 = request.CheckInImage ?? "";
-                if (cleanBase64.Contains(",")) {
-                    cleanBase64 = cleanBase64.Substring(cleanBase64.IndexOf(",") + 1);
-                }
-
-                // If it's a WorkFromHome auto punch-in or similar, image might be empty
-                string? imageUrl = null;
-                if (!string.IsNullOrWhiteSpace(cleanBase64)) 
-                {
-                    imageUrl = await _r2Service.UploadBase64ImageAsync(cleanBase64, $"checkin_{request.CoachId}_{DateTime.UtcNow.Ticks}");
-                }
-
-                // Use IST Time instead of UtcNow
-                var indiaTime = GetIndiaTime();
-
-                var attendanceRecord = new ResourceAttendance
-                {
-                    ResourceId = resourceIdInt,   
-                    CheckInTime = indiaTime.TimeOfDay,                   
-                      SchoolId = string.IsNullOrWhiteSpace(request.SchoolId) ? null : request.SchoolId, // 🔥 Force it to null if empty                    CheckInDate = indiaTime.Date,
-
-                    CheckInImage = imageUrl ?? "",
-                    CheckInLocation = request.CheckInLocation,
-                    
-                    // 🔥 NEW: Store Attendance Type and Remark
-                    Type = request.Type ?? "InCentre",
-                    AttendanceRemark = request.AttendanceRemark,
-
-                    TotalCalls = 0,
-                    TotalEmails = 0,
-                    TotalWhatsApp = 0,
-                    TotalParentsTargeted = 0
-                };
-
-                _context.ResourceAttendances.Add(attendanceRecord);
-                await _context.SaveChangesAsync();
-
-                return Ok(new { message = "Check-in successful", recordId = attendanceRecord.Id });
-            }
-            // 👉 This is C# code. Put this in your .NET Backend!
-catch (Exception ex)
+[HttpPost("checkin")]
+public async Task<IActionResult> CheckIn([FromBody] CheckInRequest request)
 {
-    var actualError = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
-    return StatusCode(500, new { message = $"Backend Crash: {actualError}" });
-}
+    try 
+    {
+        if (request == null) return BadRequest(new { message = "Invalid payload" });
+
+        if (!int.TryParse(request.CoachId, out int resourceIdInt))
+            return BadRequest(new { message = "Invalid Coach ID format. Must be a number." });
+
+        var resourceExists = await _context.ResourceMasters.AnyAsync(r => r.Id == resourceIdInt);
+        if (!resourceExists) return NotFound(new { message = $"Counselor with ID {request.CoachId} does not exist." });
+
+        var existingSession = await _context.ResourceAttendances
+            .FirstOrDefaultAsync(a => a.ResourceId == resourceIdInt && a.CheckOutTime == null);
+
+        if (existingSession != null) return Conflict(new { message = "You are already checked in. Please check out first." });
+
+        string cleanBase64 = request.CheckInImage ?? "";
+        if (cleanBase64.Contains(",")) {
+            cleanBase64 = cleanBase64.Substring(cleanBase64.IndexOf(",") + 1);
         }
+
+        // If it's a WorkFromHome auto punch-in or similar, image might be empty
+        string? imageUrl = null;
+        if (!string.IsNullOrWhiteSpace(cleanBase64)) 
+        {
+            imageUrl = await _r2Service.UploadBase64ImageAsync(cleanBase64, $"checkin_{request.CoachId}_{DateTime.UtcNow.Ticks}");
+        }
+
+        // Use IST Time instead of UtcNow
+        var indiaTime = GetIndiaTime();
+
+        var attendanceRecord = new ResourceAttendance
+        {
+            ResourceId = resourceIdInt,   
+            CheckInTime = indiaTime.TimeOfDay,                   
+            CheckInDate = indiaTime.Date,
+
+            // 🔥 FIX: Pass an empty string "" instead of null to prevent the MySQL crash!
+            SchoolId = string.IsNullOrWhiteSpace(request.SchoolId) ? "InTraining" : request.SchoolId,
+
+            CheckInImage = imageUrl ?? "",
+            CheckInLocation = request.CheckInLocation ?? "",
+            
+            Type = request.Type ?? "InCentre",
+            AttendanceRemark = request.AttendanceRemark ?? "",
+
+            TotalCalls = 0,
+            TotalEmails = 0,
+            TotalWhatsApp = 0,
+            TotalParentsTargeted = 0
+        };
+
+        _context.ResourceAttendances.Add(attendanceRecord);
+        await _context.SaveChangesAsync();
+
+        return Ok(new { message = "Check-in successful", recordId = attendanceRecord.Id });
+    }
+    catch (Exception ex)
+    {
+        var actualError = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
+        return StatusCode(500, new { message = $"Backend Crash: {actualError}" });
+    }
+}
+//         [HttpPost("checkin")]
+//         public async Task<IActionResult> CheckIn([FromBody] CheckInRequest request)
+//         {
+//             try 
+//             {
+//                 if (request == null) return BadRequest(new { message = "Invalid payload" });
+
+//                 if (!int.TryParse(request.CoachId, out int resourceIdInt))
+//                     return BadRequest(new { message = "Invalid Coach ID format. Must be a number." });
+
+//                 var resourceExists = await _context.ResourceMasters.AnyAsync(r => r.Id == resourceIdInt);
+//                 if (!resourceExists) return NotFound(new { message = $"Counselor with ID {request.CoachId} does not exist." });
+
+//                 var existingSession = await _context.ResourceAttendances
+//                     .FirstOrDefaultAsync(a => a.ResourceId == resourceIdInt && a.CheckOutTime == null);
+
+//                 if (existingSession != null) return Conflict(new { message = "You are already checked in. Please check out first." });
+
+//                 string cleanBase64 = request.CheckInImage ?? "";
+//                 if (cleanBase64.Contains(",")) {
+//                     cleanBase64 = cleanBase64.Substring(cleanBase64.IndexOf(",") + 1);
+//                 }
+
+//                 // If it's a WorkFromHome auto punch-in or similar, image might be empty
+//                 string? imageUrl = null;
+//                 if (!string.IsNullOrWhiteSpace(cleanBase64)) 
+//                 {
+//                     imageUrl = await _r2Service.UploadBase64ImageAsync(cleanBase64, $"checkin_{request.CoachId}_{DateTime.UtcNow.Ticks}");
+//                 }
+
+//                 // Use IST Time instead of UtcNow
+//                 var indiaTime = GetIndiaTime();
+
+//                 var attendanceRecord = new ResourceAttendance
+//                 {
+//                     ResourceId = resourceIdInt,   
+//                     CheckInTime = indiaTime.TimeOfDay,                   
+//                       SchoolId = string.IsNullOrWhiteSpace(request.SchoolId) ? null : request.SchoolId, // 🔥 Force it to null if empty                    CheckInDate = indiaTime.Date,
+
+//                     CheckInImage = imageUrl ?? "",
+//                     CheckInLocation = request.CheckInLocation,
+                    
+//                     // 🔥 NEW: Store Attendance Type and Remark
+//                     Type = request.Type ?? "InCentre",
+//                     AttendanceRemark = request.AttendanceRemark,
+
+//                     TotalCalls = 0,
+//                     TotalEmails = 0,
+//                     TotalWhatsApp = 0,
+//                     TotalParentsTargeted = 0
+//                 };
+
+//                 _context.ResourceAttendances.Add(attendanceRecord);
+//                 await _context.SaveChangesAsync();
+
+//                 return Ok(new { message = "Check-in successful", recordId = attendanceRecord.Id });
+//             }
+//             // 👉 This is C# code. Put this in your .NET Backend!
+// catch (Exception ex)
+// {
+//     var actualError = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
+//     return StatusCode(500, new { message = $"Backend Crash: {actualError}" });
+// }
+//         }
 
         [HttpPost("sync-activity")]
         public async Task<IActionResult> SyncActivity([FromBody] SyncActivityRequest request)
