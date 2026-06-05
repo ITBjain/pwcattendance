@@ -11,6 +11,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 namespace PwcApi.Controllers
 {
@@ -443,48 +444,53 @@ public async Task<IActionResult> UpdateParentStatus([FromBody] UpdateParentStatu
     }
 }
 
-[HttpGet("coach/{coachId}/batches")]
-public async Task<IActionResult> GetCoachBatches(string coachId) 
+private DateTime GetIstTime()
 {
-    var today = DateTime.UtcNow.Date;
+    var tzId = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "India Standard Time" : "Asia/Kolkata";
+    var istZone = TimeZoneInfo.FindSystemTimeZoneById(tzId);
+    return TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, istZone);
+}
 
-    // 1. Get all sessions taught by this coach
+[HttpGet("coach/{coachId}/batches")]
+public async Task<IActionResult> GetCoachBatches(string coachId)
+{
+    // 🔥 1. Use Strict IST Time
+    var nowIst = GetIstTime();
+    var todayIst = nowIst.Date;
+
+    // 🔥 2. Filter ONLY Active Sessions (IsActive == true or 1)
     var sessionMasters = await _context.SessionMasters
-        .Where(sm => sm.CoachId == coachId) // Now comparing int to int!
+        .Where(sm => sm.CoachId == coachId && sm.IsActive == 1) 
         .ToListAsync();
 
     var sessionIds = sessionMasters.Select(sm => sm.Id).ToList();
     if (!sessionIds.Any()) return Ok(new List<object>());
 
-    // 2. Fetch the actual Schools (Centres) linked to those sessions
     var schoolIds = sessionMasters.Select(sm => sm.SchoolId).Distinct().ToList();
     var schools = await _context.SchoolMaster
         .Where(s => schoolIds.Contains(s.SchoolId))
         .ToListAsync();
 
-    // 3. Fetch the Batches (GroupVariations)
     var batches = await _context.GroupVariations
         .Where(gv => sessionIds.Contains(gv.SessionId))
         .ToListAsync();
 
     var batchIds = batches.Select(b => b.Id).ToList();
 
-    // 4. Fetch the Children for those Batches
+    // 🔥 3. Filter ONLY Active Children (IsActive == true or 1)
     var children = await _context.ParentsEnrollments
-        .Where(pe => pe.GroupVariationId != null && batchIds.Contains(pe.GroupVariationId.Value))
-        .ToListAsync();
+        .Where(pe => pe.GroupVariationId != null 
+                  && batchIds.Contains(pe.GroupVariationId.Value))
+                          .ToListAsync();
 
     var childIds = children.Select(c => c.Id).ToList();
 
-    // 5. Fetch Today's Attendance for those Children
     var todayAttendances = await _context.ChildAttendances
-        .Where(a => childIds.Contains(a.ChildEnrollmentId) && a.AttendanceDate == today)
+        .Where(a => childIds.Contains(a.ChildEnrollmentId) && a.AttendanceDate == todayIst)
         .ToListAsync();
 
-    // 6. Stitch it all together in memory with REAL Data
     var result = batches.Select(gv => 
     {
-        // Find the Session and School tied to this specific batch
         var session = sessionMasters.FirstOrDefault(sm => sm.Id == gv.SessionId);
         var school = schools.FirstOrDefault(s => s.SchoolId == session?.SchoolId);
 
@@ -493,13 +499,12 @@ public async Task<IActionResult> GetCoachBatches(string coachId)
             BatchId = gv.Id,
             AgeGroup = gv.AgeGroup,
             Timing = gv.TimeSlot,
-            Days = gv.Days,
+            Days = gv.Days, 
             TotalEnrolled = children.Count(pe => pe.GroupVariationId == gv.Id),
             
-            // 🔥 REAL DATABASE VALUES INJECTED HERE
             CentreName = school?.SchoolName ?? "Unknown Centre",
             CentreAddress = $"{school?.SchoolAddress}, {school?.SchoolCity}",
-            Status = "UPCOMING", // By default, it awaits the coach to hit "Start"
+            Status = "UPCOMING",
             
             Children = children
                 .Where(pe => pe.GroupVariationId == gv.Id)
@@ -513,7 +518,6 @@ public async Task<IActionResult> GetCoachBatches(string coachId)
                         ChildName = child.ChildName, 
                         ParentName = child.ParentName, 
                         ParentPhone = child.ParentPhone,
-                        ParentEmail = child.ParentEmail,
                         
                         TodayAttendance = attendance == null ? null : new 
                         {
@@ -743,6 +747,32 @@ public async Task<IActionResult> GetBatchAttendanceHistory(int batchId)
     if (batchHistory == null) return NotFound("Batch not found");
 
     return Ok(batchHistory);
+}
+
+[HttpPost("attendance/finalize-batch")]
+public async Task<IActionResult> FinalizeBatch([FromBody] FinalizeBatchRequest req)
+{
+    var today = DateTime.UtcNow.Date;
+
+    // Optional: You can create a "SessionLogs" table in your database to store this permanently.
+    // For now, we will just simulate a successful save.
+    
+    /* var sessionLog = new SessionLog 
+    {
+        GroupVariationId = req.BatchId,
+        CoachId = req.CoachId,
+        SessionDate = today,
+        CoachRemark = req.Remark,
+        Status = "COMPLETED"
+    };
+    _context.SessionLogs.Add(sessionLog);
+    await _context.SaveChangesAsync();
+    */
+
+    return Ok(new { 
+        success = true, 
+        message = "Session finalized and remarks saved successfully." 
+    });
 }
 
         

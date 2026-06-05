@@ -15,12 +15,12 @@ namespace PwcApi.Models
         public string CompanyEmail { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
         public string EmpId { get; set; } = string.Empty;
-        public string Email { get; set; } = string.Empty;
+        public string? Email { get; set; } = string.Empty;
         public string Phone { get; set; } = string.Empty;
         
         // 🔥 CHANGE THIS LINE: It must be a DateTime? because the DB uses a Date format
         public DateTime? DateOfJoining { get; set; } 
 
-        public string WhapiToken { get; set; } = string.Empty;
+        public string? WhapiToken { get; set; } = string.Empty;
     }
 }
