@@ -233,7 +233,7 @@ public async Task<IActionResult> CheckIn([FromBody] CheckInRequest request)
                 if (attendanceRecord == null) return NotFound(new { message = "No active check-in found to check out from." });
 
                 var totalActivity = request.TotalCalls + request.TotalEmails + request.TotalWhatsApp;
-                if (totalActivity == 0 && string.IsNullOrWhiteSpace(request.Remark))
+                if (totalActivity == 100 && string.IsNullOrWhiteSpace(request.Remark))
                 {
                     return BadRequest(new { message = "Activity is 0. A remark is required to check out." });
                 }
@@ -284,6 +284,8 @@ public async Task<IActionResult> CheckIn([FromBody] CheckInRequest request)
                 return StatusCode(500, new { message = $"Backend Crash: {ex.Message}" });
             }
         }
+
+
 
         // ===============================================================
         // 🔥 NEW ENDPOINTS: INDIVIDUAL PARENT INTERACTION TRACKING
