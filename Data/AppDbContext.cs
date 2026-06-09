@@ -8,6 +8,8 @@ namespace PwcApi.Data
         public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
         public DbSet<ResourceAttendance> ResourceAttendances { get; set; }
+
+        public DbSet<KitMaster> KitMaster { get; set; }
         public DbSet<ResourceMaster> ResourceMasters { get; set; }
         public DbSet<SchoolMaster> SchoolMaster { get; set; }
         public DbSet<PotentialParent> Potential_Parents { get; set; }

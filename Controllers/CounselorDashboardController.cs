@@ -454,17 +454,25 @@ private DateTime GetIstTime()
 [HttpGet("coach/{coachId}/batches")]
 public async Task<IActionResult> GetCoachBatches(string coachId)
 {
-    // 🔥 1. Use Strict IST Time
     var nowIst = GetIstTime();
     var todayIst = nowIst.Date;
 
-    // 🔥 2. Filter ONLY Active Sessions (IsActive == true or 1)
+    //     // 🔥 2. Filter ONLY Active Sessions (IsActive == true or 1)
     var sessionMasters = await _context.SessionMasters
         .Where(sm => sm.CoachId == coachId && sm.IsActive == 1) 
         .ToListAsync();
 
     var sessionIds = sessionMasters.Select(sm => sm.Id).ToList();
     if (!sessionIds.Any()) return Ok(new List<object>());
+
+    // 1. Fetch Sessions (🔥 REMOVED the crashing SessionKits Include)
+    // var sessionMasters = await _context.SessionMasters
+    //     // Note: Keep your existing IsActive check here (whether it's == 1 or == true based on your local code)
+    //     .Where(sm => sm.CoachId == coachId) 
+    //     .ToListAsync();
+
+    // var sessionIds = sessionMasters.Select(sm => sm.Id).ToList();
+    // if (!sessionIds.Any()) return Ok(new List<object>());
 
     var schoolIds = sessionMasters.Select(sm => sm.SchoolId).Distinct().ToList();
     var schools = await _context.SchoolMaster
@@ -473,15 +481,25 @@ public async Task<IActionResult> GetCoachBatches(string coachId)
 
     var batches = await _context.GroupVariations
         .Where(gv => sessionIds.Contains(gv.SessionId))
+        .OrderBy(gv => gv.Id) // Ensure deterministic order for sequences
         .ToListAsync();
 
     var batchIds = batches.Select(b => b.Id).ToList();
 
-    // 🔥 3. Filter ONLY Active Children (IsActive == true or 1)
+    // 🔥 2. NEW MAPPING: Fetch Kits by AgeGroup! 
+    // We find the unique AgeGroups from the Coach's batches
+    var batchAgeGroups = batches.Select(b => b.AgeGroup).Distinct().ToList();
+    
+    // We fetch the Kits that belong to those AgeGroups, including the Items & PDFs
+var relevantKits = await _context.Set<PwcApi.Models.KitMaster>()  
+      .Include(k => k.KitItems)
+            .ThenInclude(ki => ki.Item)
+        .Where(k => batchAgeGroups.Contains(k.AgeGroup))
+        .ToListAsync();
+
     var children = await _context.ParentsEnrollments
-        .Where(pe => pe.GroupVariationId != null 
-                  && batchIds.Contains(pe.GroupVariationId.Value))
-                          .ToListAsync();
+        .Where(pe => pe.GroupVariationId != null && batchIds.Contains(pe.GroupVariationId.Value))
+        .ToListAsync();
 
     var childIds = children.Select(c => c.Id).ToList();
 
@@ -494,6 +512,29 @@ public async Task<IActionResult> GetCoachBatches(string coachId)
         var session = sessionMasters.FirstOrDefault(sm => sm.Id == gv.SessionId);
         var school = schools.FirstOrDefault(s => s.SchoolId == session?.SchoolId);
 
+        // STEP A: Find the sequence index of this specific batch within the session (0 to 7)
+        var sessionBatches = batches.Where(b => b.SessionId == gv.SessionId).OrderBy(b => b.Id).ToList();
+        int batchIndex = sessionBatches.IndexOf(gv); 
+
+        // 🔥 STEP B: Get PDFs mapped by matching the Kit's AgeGroup to the Batch's AgeGroup
+        var matchedKits = relevantKits.Where(k => k.AgeGroup == gv.AgeGroup).ToList();
+
+        var orderedPdfs = matchedKits
+            .SelectMany(k => k.KitItems)
+            .Where(ki => ki.Item != null && !string.IsNullOrWhiteSpace(ki.Item.LessonPlanPdf))
+            .Select(ki => ki.Item)
+            .OrderBy(item => item.Sequence) // Order them properly
+            .Select(item => item.LessonPlanPdf)
+            .Distinct()
+            .ToList();
+
+        // STEP C: 1-to-1 Mapping! Give this batch its exact matching PDF
+        string mappedPdf = null;
+        if (batchIndex >= 0 && batchIndex < orderedPdfs.Count)
+        {
+            mappedPdf = orderedPdfs[batchIndex]; 
+        }
+
         return new 
         {
             BatchId = gv.Id,
@@ -505,6 +546,9 @@ public async Task<IActionResult> GetCoachBatches(string coachId)
             CentreName = school?.SchoolName ?? "Unknown Centre",
             CentreAddress = $"{school?.SchoolAddress}, {school?.SchoolCity}",
             Status = "UPCOMING",
+
+            // 🔥 Output the single, correct PDF mapped exactly to this batch's sequence!
+            LessonPlanPdf = mappedPdf,
             
             Children = children
                 .Where(pe => pe.GroupVariationId == gv.Id)
@@ -533,6 +577,89 @@ public async Task<IActionResult> GetCoachBatches(string coachId)
 
     return Ok(result);
 }
+
+// [HttpGet("coach/{coachId}/batches")]
+// public async Task<IActionResult> GetCoachBatches(string coachId)
+// {
+//     // 🔥 1. Use Strict IST Time
+//     var nowIst = GetIstTime();
+//     var todayIst = nowIst.Date;
+
+//     // 🔥 2. Filter ONLY Active Sessions (IsActive == true or 1)
+//     var sessionMasters = await _context.SessionMasters
+//         .Where(sm => sm.CoachId == coachId && sm.IsActive == 1) 
+//         .ToListAsync();
+
+//     var sessionIds = sessionMasters.Select(sm => sm.Id).ToList();
+//     if (!sessionIds.Any()) return Ok(new List<object>());
+
+//     var schoolIds = sessionMasters.Select(sm => sm.SchoolId).Distinct().ToList();
+//     var schools = await _context.SchoolMaster
+//         .Where(s => schoolIds.Contains(s.SchoolId))
+//         .ToListAsync();
+
+//     var batches = await _context.GroupVariations
+//         .Where(gv => sessionIds.Contains(gv.SessionId))
+//         .ToListAsync();
+
+//     var batchIds = batches.Select(b => b.Id).ToList();
+
+//     // 🔥 3. Filter ONLY Active Children (IsActive == true or 1)
+//     var children = await _context.ParentsEnrollments
+//         .Where(pe => pe.GroupVariationId != null 
+//                   && batchIds.Contains(pe.GroupVariationId.Value))
+//                           .ToListAsync();
+
+//     var childIds = children.Select(c => c.Id).ToList();
+
+//     var todayAttendances = await _context.ChildAttendances
+//         .Where(a => childIds.Contains(a.ChildEnrollmentId) && a.AttendanceDate == todayIst)
+//         .ToListAsync();
+
+//     var result = batches.Select(gv => 
+//     {
+//         var session = sessionMasters.FirstOrDefault(sm => sm.Id == gv.SessionId);
+//         var school = schools.FirstOrDefault(s => s.SchoolId == session?.SchoolId);
+
+//         return new 
+//         {
+//             BatchId = gv.Id,
+//             AgeGroup = gv.AgeGroup,
+//             Timing = gv.TimeSlot,
+//             Days = gv.Days, 
+//             TotalEnrolled = children.Count(pe => pe.GroupVariationId == gv.Id),
+            
+//             CentreName = school?.SchoolName ?? "Unknown Centre",
+//             CentreAddress = $"{school?.SchoolAddress}, {school?.SchoolCity}",
+//             Status = "UPCOMING",
+            
+//             Children = children
+//                 .Where(pe => pe.GroupVariationId == gv.Id)
+//                 .Select(child => 
+//                 {
+//                     var attendance = todayAttendances.FirstOrDefault(a => a.ChildEnrollmentId == child.Id);
+//                     return new 
+//                     { 
+//                         EnrollmentId = child.Id, 
+//                         BatchId = gv.Id, 
+//                         ChildName = child.ChildName, 
+//                         ParentName = child.ParentName, 
+//                         ParentPhone = child.ParentPhone,
+                        
+//                         TodayAttendance = attendance == null ? null : new 
+//                         {
+//                             Id = attendance.Id,
+//                             IsPresent = attendance.IsPresent,
+//                             CheckInTime = attendance.CheckInTime?.ToString(@"hh\:mm\:ss"),
+//                             CheckOutTime = attendance.CheckOutTime?.ToString(@"hh\:mm\:ss")
+//                         }
+//                     };
+//                 }).ToList()
+//         };
+//     }).ToList();
+
+//     return Ok(result);
+// }
 // [HttpGet("coach/{coachId}/batches")]
 // public async Task<IActionResult> GetCoachBatches(string coachId)
 // {
@@ -690,37 +817,139 @@ public async Task<IActionResult> GetCoachBatches(string coachId)
             }
         }
 
-        [HttpPost("attendance/mark-child")]
-public async Task<IActionResult> MarkChildAttendance([FromBody] MarkChildAttendanceRequest req)
-{
-    var today = DateTime.UtcNow.Date;
-    var timeNow = DateTime.UtcNow.TimeOfDay; // Convert to IST as needed
-
-    var record = await _context.ChildAttendances
-        .FirstOrDefaultAsync(a => a.ChildEnrollmentId == req.EnrollmentId && a.AttendanceDate == today);
-
-    if (record == null)
-    {
-        // First punch of the day (Check In or Absent)
-        record = new ChildAttendance
+        [HttpPost("mark-child")]
+        public async Task<IActionResult> MarkChildAttendance([FromBody] MarkChildAttendanceDto request)
         {
-            ChildEnrollmentId = req.EnrollmentId,
-            GroupVariationId = req.BatchId,
-            AttendanceDate = today,
-            IsPresent = req.Action == "IN" ? true : false,
-            CheckInTime = req.Action == "IN" ? timeNow : null
-        };
-        _context.ChildAttendances.Add(record);
-    }
-    else if (req.Action == "OUT")
+            try
+            {
+                if (request == null) return BadRequest(new { message = "Invalid payload" });
+
+                var nowIst = GetIstTime();
+                var todayIst = nowIst.Date;
+
+                // Validate that the enrollment exists
+                var enrollmentExists = await _context.ParentsEnrollments
+                    .AnyAsync(pe => pe.Id == request.EnrollmentId); // Maps to ParentEnrollment[cite: 1, 12]
+                if (!enrollmentExists) return NotFound(new { message = "Child enrollment record not found." });
+
+                // Validate that the batch variation exists[cite: 1]
+                var batchExists = await _context.GroupVariations
+                    .AnyAsync(gv => gv.Id == request.BatchId); // Maps to GroupVariation[cite: 1, 7]
+                if (!batchExists) return NotFound(new { message = "Batch variation not found." });
+
+                // Check if an attendance record already exists for this child today[cite: 1]
+                var existingAttendance = await _context.ChildAttendances
+                    .FirstOrDefaultAsync(ca => ca.ChildEnrollmentId == request.EnrollmentId 
+                                            && ca.GroupVariationId == request.BatchId 
+                                            && ca.AttendanceDate == todayIst); //[cite: 1]
+
+                if (request.Action.ToUpper() == "ABSENT")
+                {
+                    if (existingAttendance != null)
+                    {
+                        // If changing an existing present record to absent, remove or flag it[cite: 1]
+                        existingAttendance.IsPresent = false; //[cite: 1]
+                        existingAttendance.CheckInTime = null; //[cite: 1]
+                        existingAttendance.CheckOutTime = null; //[cite: 1]
+                    }
+                    else
+                    {
+                        // Create a specific absent entry[cite: 1]
+                        var absentRecord = new ChildAttendance //[cite: 1]
+                        {
+                            ChildEnrollmentId = request.EnrollmentId, //[cite: 1]
+                            GroupVariationId = request.BatchId, //[cite: 1]
+                            AttendanceDate = todayIst, //[cite: 1]
+                            IsPresent = false, //[cite: 1]
+                            CheckInTime = null, //[cite: 1]
+                            CheckOutTime = null //[cite: 1]
+                        };
+                        _context.ChildAttendances.Add(absentRecord); //[cite: 1]
+                    }
+                }
+                else if (request.Action.ToUpper() == "IN")
+                {
+                    if (existingAttendance == null)
+                    {
+                        var checkInRecord = new ChildAttendance //[cite: 1]
+                        {
+                            ChildEnrollmentId = request.EnrollmentId, //[cite: 1]
+                            GroupVariationId = request.BatchId, //[cite: 1]
+                            AttendanceDate = todayIst, //[cite: 1]
+                            IsPresent = true, //[cite: 1]
+                            CheckInTime = nowIst.TimeOfDay, // Sets current IST Time[cite: 1]
+                            CheckOutTime = null //[cite: 1]
+                        };
+                        _context.ChildAttendances.Add(checkInRecord); //[cite: 1]
+                    }
+                    else
+                    {
+                        existingAttendance.IsPresent = true; //[cite: 1]
+                        existingAttendance.CheckInTime = nowIst.TimeOfDay; // Reset check-in timestamp[cite: 1]
+                    }
+                }
+                else if (request.Action.ToUpper() == "OUT")
+                {
+                    if (existingAttendance == null)
+                    {
+                        return BadRequest(new { message = "Cannot check-out. Child has not been marked 'IN' today." });
+                    }
+                    existingAttendance.IsPresent = true; // Still present for the day[cite: 1]
+                    existingAttendance.CheckOutTime = nowIst.TimeOfDay; // Mark checkout timestamp in IST[cite: 1]
+                }
+                else
+                {
+                    return BadRequest(new { message = "Unknown action type. Use 'IN', 'OUT', or 'ABSENT'." });
+                }
+
+                await _context.SaveChangesAsync();
+                return Ok(new { message = $"Successfully synced status '{request.Action}' to server." });
+            }
+            catch (Exception ex)
+            {
+                var actualError = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
+                return StatusCode(500, new { message = $"Attendance Sync Error: {actualError}" });
+            }
+        }
+
+        public class MarkChildAttendanceDto
     {
-        // Second punch (Check out)
-        record.CheckOutTime = timeNow;
+        public int EnrollmentId { get; set; }
+        public int BatchId { get; set; }
+        public string Action { get; set; } // "IN", "OUT", "ABSENT"
     }
 
-    await _context.SaveChangesAsync();
-    return Ok(new { success = true, message = "Attendance updated" });
-}
+//         [HttpPost("attendance/mark-child")]
+// public async Task<IActionResult> MarkChildAttendance([FromBody] MarkChildAttendanceRequest req)
+// {
+//     var today = DateTime.UtcNow.Date;
+//     var timeNow = DateTime.UtcNow.TimeOfDay; // Convert to IST as needed
+
+//     var record = await _context.ChildAttendances
+//         .FirstOrDefaultAsync(a => a.ChildEnrollmentId == req.EnrollmentId && a.AttendanceDate == today);
+
+//     if (record == null)
+//     {
+//         // First punch of the day (Check In or Absent)
+//         record = new ChildAttendance
+//         {
+//             ChildEnrollmentId = req.EnrollmentId,
+//             GroupVariationId = req.BatchId,
+//             AttendanceDate = today,
+//             IsPresent = req.Action == "IN" ? true : false,
+//             CheckInTime = req.Action == "IN" ? timeNow : null
+//         };
+//         _context.ChildAttendances.Add(record);
+//     }
+//     else if (req.Action == "OUT")
+//     {
+//         // Second punch (Check out)
+//         record.CheckOutTime = timeNow;
+//     }
+
+//     await _context.SaveChangesAsync();
+//     return Ok(new { success = true, message = "Attendance updated" });
+// }
 
 
 [HttpGet("batch/{batchId}/attendance-history")]
