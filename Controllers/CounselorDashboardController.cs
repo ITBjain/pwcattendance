@@ -180,29 +180,81 @@ public async Task<IActionResult> AddPotentialLead([FromBody] AddLeadRequest requ
             return Ok(profile);
         }
         // GET: api/counselordashboard/centres/{counselorId}
-        [HttpGet("centres/{counselorId}")]
-        public async Task<IActionResult> GetCentres(int counselorId)
+        // [HttpGet("centres/{counselorId}")]
+        // public async Task<IActionResult> GetCentres(int counselorId)
+        // {
+        //     // Keeps the list view lightweight
+        //     var schools = await _context.SchoolMaster
+        //         .Where(s => s.CounselorId == counselorId)
+        //         .Select(s => new CentreResponse  
+        //         { 
+        //             SchoolId = s.SchoolId, 
+        //             SchoolName = s.SchoolName ?? "Unknown Centre", 
+        //             Address = $"{s.SchoolCity}, {s.SchoolAddress}", 
+        //             ContactName = s.ContactPersonName ?? "N/A", 
+        //             ContactPhone = s.ContactPersonPhone ?? "N/A"
+        //         })
+        //         .ToListAsync();
+
+        //     if (!schools.Any())
+        //     {
+        //         return NotFound(new { message = "No centres assigned to this counselor." });
+        //     }
+
+        //     return Ok(schools);
+        // }
+
+        [HttpGet("centres/{userId}")]
+public async Task<IActionResult> GetCentres(int userId)
+{
+    try
+    {
+        // 1. Find school IDs assigned directly via CounselorId
+        var counselorSchoolIds = await _context.SchoolMaster
+            .Where(s => s.CounselorId == userId)
+            .Select(s => s.SchoolId)
+            .ToListAsync();
+
+        // 2. Find school IDs assigned via SessionMasters (for the Coach role)
+        var coachSchoolIds = await _context.SessionMasters
+            .Where(sm => (sm.CoachId == userId.ToString() || sm.Id == userId) && sm.IsActive == 1)
+            .Select(sm => sm.SchoolId)
+            .Distinct()
+            .ToListAsync();
+
+        // 3. Combine both lists to get all unique assigned School IDs
+        var allAssignedSchoolIds = counselorSchoolIds
+            .Union(coachSchoolIds)
+            .Distinct()
+            .ToList();
+
+        if (!allAssignedSchoolIds.Any())
         {
-            // Keeps the list view lightweight
-            var schools = await _context.SchoolMaster
-                .Where(s => s.CounselorId == counselorId)
-                .Select(s => new CentreResponse 
-                { 
-                    SchoolId = s.SchoolId, 
-                    SchoolName = s.SchoolName ?? "Unknown Centre", 
-                    Address = $"{s.SchoolCity}, {s.SchoolAddress}", 
-                    ContactName = s.ContactPersonName ?? "N/A", 
-                    ContactPhone = s.ContactPersonPhone ?? "N/A"
-                })
-                .ToListAsync();
-
-            if (!schools.Any())
-            {
-                return NotFound(new { message = "No centres assigned to this counselor." });
-            }
-
-            return Ok(schools);
+            return Ok(new List<object>()); // Return empty list instead of throwing an error
         }
+
+        // 4. Fetch the complete school details for all mapped IDs matching your SQL logs criteria
+        var schools = await _context.SchoolMaster
+            .Where(s => allAssignedSchoolIds.Contains(s.SchoolId))
+            .Select(s => new
+            {
+                SchoolId = s.SchoolId,
+                SchoolName = s.SchoolName ?? "Unknown Centre",
+                SchoolCity = s.SchoolCity,
+                SchoolAddress = s.SchoolAddress,
+                ContactPersonName = s.ContactPersonName ?? "N/A",
+                ContactPersonPhone = s.ContactPersonPhone ?? "N/A"
+            })
+            .ToListAsync();
+
+        return Ok(schools);
+    }
+    catch (Exception ex)
+    {
+        var innerMsg = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
+        return StatusCode(500, new { message = $"Error fetching assigned centres: {innerMsg}" });
+    }
+}
 
         // GET: api/counselordashboard/centre/{schoolId}
         // NEW ENDPOINT: Returns complete information for a specific centre
