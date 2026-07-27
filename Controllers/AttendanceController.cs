@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using PwcApi.Data;
 using PwcApi.DTOs;
 using PwcApi.Models;
@@ -16,11 +17,13 @@ namespace PwcApi.Controllers
     {
         private readonly AppDbContext _context;
         private readonly R2StorageService _r2Service;
+        private readonly ILogger<AttendanceController> _logger;
 
-        public AttendanceController(AppDbContext context, R2StorageService r2Service)
+        public AttendanceController(AppDbContext context, R2StorageService r2Service, ILogger<AttendanceController> logger)
         {
             _context = context;
             _r2Service = r2Service;
+            _logger = logger;
         }
 
         // 🔥 HELPER FUNCTION: Safely get IST on both Windows and Linux servers
@@ -79,7 +82,7 @@ public async Task<IActionResult> CheckIn([FromBody] CheckInRequest request)
             SchoolId = string.IsNullOrWhiteSpace(request.SchoolId) ? "InTraining" : request.SchoolId,
 
             CheckInImage = imageUrl ?? "",
-            CheckInLocation = request.CheckInLocation ?? "",
+            CheckInLocation = request.CheckInLocation ?? "", 
             
             Type = request.Type ?? "InCentre",
             AttendanceRemark = request.AttendanceRemark ?? "",
@@ -97,6 +100,7 @@ public async Task<IActionResult> CheckIn([FromBody] CheckInRequest request)
     }
     catch (Exception ex)
     {
+        _logger.LogError(ex, "CheckIn failed for CoachId={CoachId}", request?.CoachId);
         var actualError = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
         return StatusCode(500, new { message = $"Backend Crash: {actualError}" });
     }
@@ -337,6 +341,7 @@ public async Task<IActionResult> CheckIn([FromBody] CheckInRequest request)
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "GetParentHistory failed for ParentId={ParentId}", parentId);
                 return StatusCode(500, new { message = ex.Message });
             }
         }
@@ -346,8 +351,13 @@ public async Task<IActionResult> CheckIn([FromBody] CheckInRequest request)
         {
             try
             {
+                _logger.LogInformation("BC Sync requested for EmpId={EmpId}", empId);
                 var resource = await _context.ResourceMasters.FirstOrDefaultAsync(r => r.EmpId == empId);
-                if (resource == null) return NotFound(new { message = $"No counselor found with EmpId: {empId}" });
+                if (resource == null)
+                {
+                    _logger.LogWarning("BC Sync missing resource for EmpId={EmpId}", empId);
+                    return NotFound(new { message = $"No counselor found with EmpId: {empId}" });
+                }
 
                 var attendances = await _context.ResourceAttendances
                     .Where(a => a.ResourceId == resource.Id)
@@ -379,6 +389,7 @@ public async Task<IActionResult> CheckIn([FromBody] CheckInRequest request)
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "GetAttendanceForBusinessCentral failed for EmpId={EmpId}", empId);
                 return StatusCode(500, new { message = $"BC Sync Error: {ex.Message}" });
             }
         }

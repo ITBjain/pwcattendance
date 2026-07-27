@@ -50,6 +50,7 @@ namespace PwcApi.Controllers
             };
             _context.ChildReports.Add(report);
             await _context.SaveChangesAsync();
+            
 
             // 3. Trigger External APIs (Pseudo-code)
             if (req.SendWhatsApp) {
@@ -511,7 +512,7 @@ public async Task<IActionResult> GetCoachBatches(string coachId)
 
     //     // 🔥 2. Filter ONLY Active Sessions (IsActive == true or 1)
     var sessionMasters = await _context.SessionMasters
-        .Where(sm => sm.CoachId == coachId && sm.IsActive == 1) 
+        .Where(sm => sm.CoachId == coachId && sm.IsActive == 1 ) 
         .ToListAsync();
 
     var sessionIds = sessionMasters.Select(sm => sm.Id).ToList();
@@ -550,7 +551,7 @@ var relevantKits = await _context.Set<PwcApi.Models.KitMaster>()
         .ToListAsync();
 
     var children = await _context.ParentsEnrollments
-        .Where(pe => pe.GroupVariationId != null && batchIds.Contains(pe.GroupVariationId.Value))
+        .Where(pe => pe.GroupVariationId != null && batchIds.Contains(pe.GroupVariationId.Value) && pe.PaymentStatus == "Paid")
         .ToListAsync();
 
     var childIds = children.Select(c => c.Id).ToList();

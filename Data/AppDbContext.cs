@@ -11,9 +11,9 @@ namespace PwcApi.Data
 
         public DbSet<KitMaster> KitMaster { get; set; }
         public DbSet<ResourceMaster> ResourceMasters { get; set; }
-        public DbSet<SchoolMaster> SchoolMaster { get; set; }
-        public DbSet<PotentialParent> Potential_Parents { get; set; }
-        public DbSet<ParentsEnrollment> ParentsEnrollments { get; set; } 
+        public DbSet<SchoolMaster> SchoolMaster { get; set; }       
+        public DbSet<PotentialParent> Potential_Parents { get; set; }      
+        public DbSet<ParentsEnrollment> ParentsEnrollments { get; set; }   
         
         // 🔥 THIS IS THE FIX FOR LINE 21:
         public DbSet<SessionMaster> SessionMasters { get; set; } 
