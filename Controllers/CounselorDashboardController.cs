@@ -567,22 +567,13 @@ public async Task<IActionResult> GetCoachBatches(string coachId)
     var nowIst = GetIstTime();
     var todayIst = nowIst.Date;
 
-    //     // 🔥 2. Filter ONLY Active Sessions (IsActive == true or 1)
+    // 🔥 1. Fetch ALL Active Sessions (Removed the CoachId filter)
     var sessionMasters = await _context.SessionMasters
-        .Where(sm => sm.CoachId == coachId && sm.IsActive == 1 ) 
+        .Where(sm => sm.IsActive == 1 ) 
         .ToListAsync();
 
     var sessionIds = sessionMasters.Select(sm => sm.Id).ToList();
     if (!sessionIds.Any()) return Ok(new List<object>());
-
-    // 1. Fetch Sessions (🔥 REMOVED the crashing SessionKits Include)
-    // var sessionMasters = await _context.SessionMasters
-    //     // Note: Keep your existing IsActive check here (whether it's == 1 or == true based on your local code)
-    //     .Where(sm => sm.CoachId == coachId) 
-    //     .ToListAsync();
-
-    // var sessionIds = sessionMasters.Select(sm => sm.Id).ToList();
-    // if (!sessionIds.Any()) return Ok(new List<object>());
 
     var schoolIds = sessionMasters.Select(sm => sm.SchoolId).Distinct().ToList();
     var schools = await _context.SchoolMaster
@@ -591,18 +582,15 @@ public async Task<IActionResult> GetCoachBatches(string coachId)
 
     var batches = await _context.GroupVariations
         .Where(gv => sessionIds.Contains(gv.SessionId))
-        .OrderBy(gv => gv.Id) // Ensure deterministic order for sequences
+        .OrderBy(gv => gv.Id) 
         .ToListAsync();
 
     var batchIds = batches.Select(b => b.Id).ToList();
 
-    // 🔥 2. NEW MAPPING: Fetch Kits by AgeGroup! 
-    // We find the unique AgeGroups from the Coach's batches
     var batchAgeGroups = batches.Select(b => b.AgeGroup).Distinct().ToList();
     
-    // We fetch the Kits that belong to those AgeGroups, including the Items & PDFs
-var relevantKits = await _context.Set<PwcApi.Models.KitMaster>()  
-      .Include(k => k.KitItems)
+    var relevantKits = await _context.Set<PwcApi.Models.KitMaster>()  
+        .Include(k => k.KitItems)
             .ThenInclude(ki => ki.Item)
         .Where(k => batchAgeGroups.Contains(k.AgeGroup))
         .ToListAsync();
@@ -617,33 +605,33 @@ var relevantKits = await _context.Set<PwcApi.Models.KitMaster>()
         .Where(a => childIds.Contains(a.ChildEnrollmentId) && a.AttendanceDate == todayIst)
         .ToListAsync();
 
-    var result = batches.Select(gv => 
+    var unsortedResult = batches.Select(gv => 
     {
         var session = sessionMasters.FirstOrDefault(sm => sm.Id == gv.SessionId);
         var school = schools.FirstOrDefault(s => s.SchoolId == session?.SchoolId);
 
-        // STEP A: Find the sequence index of this specific batch within the session (0 to 7)
         var sessionBatches = batches.Where(b => b.SessionId == gv.SessionId).OrderBy(b => b.Id).ToList();
         int batchIndex = sessionBatches.IndexOf(gv); 
 
-        // 🔥 STEP B: Get PDFs mapped by matching the Kit's AgeGroup to the Batch's AgeGroup
         var matchedKits = relevantKits.Where(k => k.AgeGroup == gv.AgeGroup).ToList();
 
         var orderedPdfs = matchedKits
             .SelectMany(k => k.KitItems)
             .Where(ki => ki.Item != null && !string.IsNullOrWhiteSpace(ki.Item.LessonPlanPdf))
             .Select(ki => ki.Item)
-            .OrderBy(item => item.Sequence) // Order them properly
+            .OrderBy(item => item.Sequence) 
             .Select(item => item.LessonPlanPdf)
             .Distinct()
             .ToList();
 
-        // STEP C: 1-to-1 Mapping! Give this batch its exact matching PDF
         string mappedPdf = null;
         if (batchIndex >= 0 && batchIndex < orderedPdfs.Count)
         {
             mappedPdf = orderedPdfs[batchIndex]; 
         }
+
+        // 🔥 2. Determine if this batch belongs to the coach requesting the API
+        bool isAssigned = session?.CoachId == coachId;
 
         return new 
         {
@@ -657,7 +645,9 @@ var relevantKits = await _context.Set<PwcApi.Models.KitMaster>()
             CentreAddress = $"{school?.SchoolAddress}, {school?.SchoolCity}",
             Status = "UPCOMING",
 
-            // 🔥 Output the single, correct PDF mapped exactly to this batch's sequence!
+            // 🔥 3. Pass the flag to Android
+            IsAssigned = isAssigned, 
+
             LessonPlanPdf = mappedPdf,
             
             Children = children
@@ -672,6 +662,7 @@ var relevantKits = await _context.Set<PwcApi.Models.KitMaster>()
                         ChildName = child.ChildName, 
                         ParentName = child.ParentName, 
                         ParentPhone = child.ParentPhone,
+                        parentEmail = child.ParentEmail, // Keeping this if you added it earlier
                         
                         TodayAttendance = attendance == null ? null : new 
                         {
@@ -683,10 +674,144 @@ var relevantKits = await _context.Set<PwcApi.Models.KitMaster>()
                     };
                 }).ToList()
         };
-    }).ToList();
+    });
+
+    // 🔥 4. Sort: Assigned batches at the top, then alphabetically by Centre
+    var result = unsortedResult
+        .OrderByDescending(b => b.IsAssigned)
+        .ThenBy(b => b.CentreName)
+        .ToList();
 
     return Ok(result);
 }
+
+
+// [HttpGet("coach/{coachId}/batches")]
+// public async Task<IActionResult> GetCoachBatches(string coachId)
+// {
+//     var nowIst = GetIstTime();
+//     var todayIst = nowIst.Date;
+
+//     //     // 🔥 2. Filter ONLY Active Sessions (IsActive == true or 1)
+//     var sessionMasters = await _context.SessionMasters
+//         .Where(sm => sm.CoachId == coachId && sm.IsActive == 1 ) 
+//         .ToListAsync();
+
+//     var sessionIds = sessionMasters.Select(sm => sm.Id).ToList();
+//     if (!sessionIds.Any()) return Ok(new List<object>());
+
+//     // 1. Fetch Sessions (🔥 REMOVED the crashing SessionKits Include)
+//     // var sessionMasters = await _context.SessionMasters
+//     //     // Note: Keep your existing IsActive check here (whether it's == 1 or == true based on your local code)
+//     //     .Where(sm => sm.CoachId == coachId) 
+//     //     .ToListAsync();
+
+//     // var sessionIds = sessionMasters.Select(sm => sm.Id).ToList();
+//     // if (!sessionIds.Any()) return Ok(new List<object>());
+
+//     var schoolIds = sessionMasters.Select(sm => sm.SchoolId).Distinct().ToList();
+//     var schools = await _context.SchoolMaster
+//         .Where(s => schoolIds.Contains(s.SchoolId))
+//         .ToListAsync();
+
+//     var batches = await _context.GroupVariations
+//         .Where(gv => sessionIds.Contains(gv.SessionId))
+//         .OrderBy(gv => gv.Id) // Ensure deterministic order for sequences
+//         .ToListAsync();
+
+//     var batchIds = batches.Select(b => b.Id).ToList();
+
+//     // 🔥 2. NEW MAPPING: Fetch Kits by AgeGroup! 
+//     // We find the unique AgeGroups from the Coach's batches
+//     var batchAgeGroups = batches.Select(b => b.AgeGroup).Distinct().ToList();
+    
+//     // We fetch the Kits that belong to those AgeGroups, including the Items & PDFs
+// var relevantKits = await _context.Set<PwcApi.Models.KitMaster>()  
+//       .Include(k => k.KitItems)
+//             .ThenInclude(ki => ki.Item)
+//         .Where(k => batchAgeGroups.Contains(k.AgeGroup))
+//         .ToListAsync();
+
+//     var children = await _context.ParentsEnrollments
+//         .Where(pe => pe.GroupVariationId != null && batchIds.Contains(pe.GroupVariationId.Value) && pe.PaymentStatus == "Paid")
+//         .ToListAsync();
+
+//     var childIds = children.Select(c => c.Id).ToList();
+
+//     var todayAttendances = await _context.ChildAttendances
+//         .Where(a => childIds.Contains(a.ChildEnrollmentId) && a.AttendanceDate == todayIst)
+//         .ToListAsync();
+
+//     var result = batches.Select(gv => 
+//     {
+//         var session = sessionMasters.FirstOrDefault(sm => sm.Id == gv.SessionId);
+//         var school = schools.FirstOrDefault(s => s.SchoolId == session?.SchoolId);
+
+//         // STEP A: Find the sequence index of this specific batch within the session (0 to 7)
+//         var sessionBatches = batches.Where(b => b.SessionId == gv.SessionId).OrderBy(b => b.Id).ToList();
+//         int batchIndex = sessionBatches.IndexOf(gv); 
+
+//         // 🔥 STEP B: Get PDFs mapped by matching the Kit's AgeGroup to the Batch's AgeGroup
+//         var matchedKits = relevantKits.Where(k => k.AgeGroup == gv.AgeGroup).ToList();
+
+//         var orderedPdfs = matchedKits
+//             .SelectMany(k => k.KitItems)
+//             .Where(ki => ki.Item != null && !string.IsNullOrWhiteSpace(ki.Item.LessonPlanPdf))
+//             .Select(ki => ki.Item)
+//             .OrderBy(item => item.Sequence) // Order them properly
+//             .Select(item => item.LessonPlanPdf)
+//             .Distinct()
+//             .ToList();
+
+//         // STEP C: 1-to-1 Mapping! Give this batch its exact matching PDF
+//         string mappedPdf = null;
+//         if (batchIndex >= 0 && batchIndex < orderedPdfs.Count)
+//         {
+//             mappedPdf = orderedPdfs[batchIndex]; 
+//         }
+
+//         return new 
+//         {
+//             BatchId = gv.Id,
+//             AgeGroup = gv.AgeGroup,
+//             Timing = gv.TimeSlot,
+//             Days = gv.Days, 
+//             TotalEnrolled = children.Count(pe => pe.GroupVariationId == gv.Id),
+            
+//             CentreName = school?.SchoolName ?? "Unknown Centre",
+//             CentreAddress = $"{school?.SchoolAddress}, {school?.SchoolCity}",
+//             Status = "UPCOMING",
+
+//             // 🔥 Output the single, correct PDF mapped exactly to this batch's sequence!
+//             LessonPlanPdf = mappedPdf,
+            
+//             Children = children
+//                 .Where(pe => pe.GroupVariationId == gv.Id)
+//                 .Select(child => 
+//                 {
+//                     var attendance = todayAttendances.FirstOrDefault(a => a.ChildEnrollmentId == child.Id);
+//                     return new 
+//                     { 
+//                         EnrollmentId = child.Id, 
+//                         BatchId = gv.Id, 
+//                         ChildName = child.ChildName, 
+//                         ParentName = child.ParentName, 
+//                         ParentPhone = child.ParentPhone,
+                        
+//                         TodayAttendance = attendance == null ? null : new 
+//                         {
+//                             Id = attendance.Id,
+//                             IsPresent = attendance.IsPresent,
+//                             CheckInTime = attendance.CheckInTime?.ToString(@"hh\:mm\:ss"),
+//                             CheckOutTime = attendance.CheckOutTime?.ToString(@"hh\:mm\:ss")
+//                         }
+//                     };
+//                 }).ToList()
+//         };
+//     }).ToList();
+
+//     return Ok(result);
+// }
 
 // [HttpGet("coach/{coachId}/batches")]
 // public async Task<IActionResult> GetCoachBatches(string coachId)
