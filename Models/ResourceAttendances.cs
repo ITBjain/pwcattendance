@@ -55,32 +55,78 @@ namespace PwcApi.Models
 //     {
 //         [Key]
 //         public int Id { get; set; }
-        
-//         public int ResourceId { get; set; } 
-        
-//         // 🔥 FIX 1: Add a '?' to make SessionId optional (nullable)
-//         public int? SessionId { get; set; } 
-        
+
+//         public int ResourceId { get; set; }
+
+//         public int? SessionId { get; set; }
+
 //         public string SchoolId { get; set; } = string.Empty;
-        
-//         public DateTime CheckInDate { get; set; } 
+
+//         public DateTime CheckInDate { get; set; }
 //         public TimeSpan? CheckInTime { get; set; }
+
+//         // 🔥 NEW: the calendar date of the punch-out (IST). Needed when a coach forgets to punch out
+//         // and closes the session on a later day, so durations/reports stay correct.
+//         // Requires: ALTER TABLE ResourceAttendances ADD COLUMN CheckOutDate DATETIME(6) NULL;
+//         public DateTime? CheckOutDate { get; set; }
 //         public TimeSpan? CheckOutTime { get; set; }
-        
+
 //         public string? CheckInImage { get; set; }
 //         public string? CheckOutImage { get; set; }
 //         public string? CheckInLocation { get; set; }
 //         public string? CheckOutLocation { get; set; }
-        
+
 //         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
-//         // Add these to your existing ResourceAttendance.cs model
 //         public int TotalCalls { get; set; } = 0;
 //         public int TotalEmails { get; set; } = 0;
 //         public int TotalWhatsApp { get; set; } = 0;
 //         public int TotalParentsTargeted { get; set; } = 0;
 //         public string? Remark { get; set; }
-//         public string? Type { get; set;}
-//         public string? AttendanceRemark { get; set;}
+//         public string? Type { get; set; }
+//         public string? AttendanceRemark { get; set; }
 //     }
 // }
+
+
+
+// // using System;
+// // using System.ComponentModel.DataAnnotations;
+// // using System.ComponentModel.DataAnnotations.Schema;
+
+// // namespace PwcApi.Models
+// // {
+// //     [Table("ResourceAttendances")]
+// //     public class ResourceAttendance
+// //     {
+// //         [Key]
+// //         public int Id { get; set; }
+        
+// //         public int ResourceId { get; set; } 
+        
+// //         // 🔥 FIX 1: Add a '?' to make SessionId optional (nullable)
+// //         public int? SessionId { get; set; } 
+        
+// //         public string SchoolId { get; set; } = string.Empty;
+        
+// //         public DateTime CheckInDate { get; set; } 
+// //         public TimeSpan? CheckInTime { get; set; }
+// //         public TimeSpan? CheckOutTime { get; set; }
+        
+// //         public string? CheckInImage { get; set; }
+// //         public string? CheckOutImage { get; set; }
+// //         public string? CheckInLocation { get; set; }
+// //         public string? CheckOutLocation { get; set; }
+        
+// //         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+// //         // Add these to your existing ResourceAttendance.cs model
+// //         public int TotalCalls { get; set; } = 0;
+// //         public int TotalEmails { get; set; } = 0;
+// //         public int TotalWhatsApp { get; set; } = 0;
+// //         public int TotalParentsTargeted { get; set; } = 0;
+// //         public string? Remark { get; set; }
+// //         public string? Type { get; set;}
+// //         public string? AttendanceRemark { get; set;}
+// //     }
+// // }

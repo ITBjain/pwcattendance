@@ -27,16 +27,20 @@ namespace PwcApi.Services
         private const int WhatsAppCaptionLimit = 1000;
 
         private readonly IServiceScopeFactory _scopes;
+        private readonly BroadcastSignal _signal;
         private readonly ILogger<WhatsAppBroadcastWorker> _logger;
         private readonly int _minDelayMs;
         private readonly int _maxDelayMs;
 
-        public WhatsAppBroadcastWorker(IServiceScopeFactory scopes, ILogger<WhatsAppBroadcastWorker> logger, IConfiguration config)
+        public WhatsAppBroadcastWorker(IServiceScopeFactory scopes, BroadcastSignal signal,
+                                       ILogger<WhatsAppBroadcastWorker> logger, IConfiguration config)
         {
             _scopes = scopes;
+            _signal = signal;
             _logger = logger;
-            _minDelayMs = Math.Max(0, config.GetValue<int?>("Whapi:MinDelayMs") ?? 1500);
-            _maxDelayMs = Math.Max(_minDelayMs, config.GetValue<int?>("Whapi:MaxDelayMs") ?? 3500);
+            // One shared number sends for every coach → keep a human-like pace (≈ 5–8 parents per minute).
+            _minDelayMs = Math.Max(0, config.GetValue<int?>("Whapi:MinDelayMs") ?? 6000);
+            _maxDelayMs = Math.Max(_minDelayMs, config.GetValue<int?>("Whapi:MaxDelayMs") ?? 12000);
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -48,7 +52,8 @@ namespace PwcApi.Services
                 try
                 {
                     bool processed = await ProcessNextBroadcastAsync(stoppingToken);
-                    if (!processed) await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+                    // Sleep until a coach queues something (instant wake-up) or 60 s pass (safety net)
+                    if (!processed) await _signal.WaitAsync(TimeSpan.FromSeconds(60), stoppingToken);
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
@@ -102,7 +107,7 @@ namespace PwcApi.Services
             await db.SaveChangesAsync(ct);
 
             var coach = await db.ResourceMasters.FirstOrDefaultAsync(r => r.Id == job.CoachId, ct);
-            var token = whapi.ResolveToken(coach);
+            var token = whapi.ResolveBatchToken(coach); // the shared PWC WhatsApp number
 
             var media = new List<string>();
             if (!string.IsNullOrWhiteSpace(job.MediaPayloads))
@@ -117,7 +122,7 @@ namespace PwcApi.Services
                 .ToListAsync(ct);
 
             string? stopReason = token == null
-                ? "WhatsApp is not connected for this coach (no Whapi token)."
+                ? "The PWC WhatsApp number is not configured on the server (Whapi:DefaultToken is empty)."
                 : null;
 
             var random = new Random();
