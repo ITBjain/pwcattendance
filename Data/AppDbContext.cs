@@ -1,5 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using PwcApi.Models; 
+using PwcApi.Models;
 
 namespace PwcApi.Data
 {
@@ -8,44 +8,92 @@ namespace PwcApi.Data
         public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
         public DbSet<ResourceAttendance> ResourceAttendances { get; set; }
-
         public DbSet<KitMaster> KitMaster { get; set; }
         public DbSet<ResourceMaster> ResourceMasters { get; set; }
-        public DbSet<SchoolMaster> SchoolMaster { get; set; }       
-        public DbSet<PotentialParent> Potential_Parents { get; set; }      
-        public DbSet<ParentsEnrollment> ParentsEnrollments { get; set; }   
-        
-        // 🔥 THIS IS THE FIX FOR LINE 21:
-        public DbSet<SessionMaster> SessionMasters { get; set; } 
-        public DbSet<AttendanceLog> CallReport { get; set;}
+        public DbSet<SchoolMaster> SchoolMaster { get; set; }
+        public DbSet<PotentialParent> Potential_Parents { get; set; }
+        public DbSet<ParentsEnrollment> ParentsEnrollments { get; set; }
+        public DbSet<SessionMaster> SessionMasters { get; set; }
+        public DbSet<AttendanceLog> CallReport { get; set; }
+        public DbSet<InteractionLog> InteractionLogs { get; set; }
+        public DbSet<GroupVariation> GroupVariations { get; set; }
+        public DbSet<ChildAttendance> ChildAttendances { get; set; }
+        public DbSet<ChildReport> ChildReports { get; set; }
 
-        public DbSet<InteractionLog> InteractionLogs { get; set;}
+        // 🔥 NEW: coach → parents WhatsApp updates (see sql/2026-10_attendance_and_messaging.sql)
+        public DbSet<BatchBroadcast> BatchBroadcasts { get; set; }
+        public DbSet<BatchBroadcastRecipient> BatchBroadcastRecipients { get; set; }
 
-// Ensure both of these exist
-    public DbSet<GroupVariation> GroupVariations { get; set; }
-    public DbSet<ChildAttendance> ChildAttendances { get; set; }
-    public DbSet<ChildReport> ChildReports { get; set; }
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
 
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
-    {
-        base.OnModelCreating(modelBuilder);
+            modelBuilder.Entity<ChildAttendance>()
+                .HasOne(a => a.GroupVariation)
+                .WithMany(g => g.ChildAttendances)
+                .HasForeignKey(a => a.GroupVariationId)
+                .OnDelete(DeleteBehavior.Cascade);
 
-        // Tell EF Core explicitly about the relationship (Optional but recommended)
-        modelBuilder.Entity<ChildAttendance>()
-            .HasOne(a => a.GroupVariation)
-            .WithMany(g => g.ChildAttendances)
-            .HasForeignKey(a => a.GroupVariationId)
-            .OnDelete(DeleteBehavior.Cascade); // If a batch is deleted, its attendance logs are deleted
-
-            // 🔥 Add this conversion rule for SessionMaster
-    modelBuilder.Entity<SessionMaster>()
-        .Property(s => s.CoachId)
-        .HasConversion(
-            v => string.IsNullOrEmpty(v) ? 0 : int.Parse(v), // Convert C# String to DB Int
-            v => v.ToString()                                // Convert DB Int to C# String
-        );
-    }  
-    
-    
-      }
+            modelBuilder.Entity<SessionMaster>()
+                .Property(s => s.CoachId)
+                .HasConversion(
+                    v => string.IsNullOrEmpty(v) ? 0 : int.Parse(v),
+                    v => v.ToString()
+                );
+        }
+    }
 }
+
+
+
+// using Microsoft.EntityFrameworkCore;
+// using PwcApi.Models; 
+
+// namespace PwcApi.Data
+// {
+//     public class AppDbContext : DbContext
+//     {
+//         public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
+
+//         public DbSet<ResourceAttendance> ResourceAttendances { get; set; }
+
+//         public DbSet<KitMaster> KitMaster { get; set; }
+//         public DbSet<ResourceMaster> ResourceMasters { get; set; }
+//         public DbSet<SchoolMaster> SchoolMaster { get; set; }       
+//         public DbSet<PotentialParent> Potential_Parents { get; set; }      
+//         public DbSet<ParentsEnrollment> ParentsEnrollments { get; set; }   
+        
+//         // 🔥 THIS IS THE FIX FOR LINE 21:
+//         public DbSet<SessionMaster> SessionMasters { get; set; } 
+//         public DbSet<AttendanceLog> CallReport { get; set;}
+
+//         public DbSet<InteractionLog> InteractionLogs { get; set;}
+
+// // Ensure both of these exist
+//     public DbSet<GroupVariation> GroupVariations { get; set; }
+//     public DbSet<ChildAttendance> ChildAttendances { get; set; }
+//     public DbSet<ChildReport> ChildReports { get; set; }
+
+//     protected override void OnModelCreating(ModelBuilder modelBuilder)
+//     {
+//         base.OnModelCreating(modelBuilder);
+
+//         // Tell EF Core explicitly about the relationship (Optional but recommended)
+//         modelBuilder.Entity<ChildAttendance>()
+//             .HasOne(a => a.GroupVariation)
+//             .WithMany(g => g.ChildAttendances)
+//             .HasForeignKey(a => a.GroupVariationId)
+//             .OnDelete(DeleteBehavior.Cascade); // If a batch is deleted, its attendance logs are deleted
+
+//             // 🔥 Add this conversion rule for SessionMaster
+//     modelBuilder.Entity<SessionMaster>()
+//         .Property(s => s.CoachId)
+//         .HasConversion(
+//             v => string.IsNullOrEmpty(v) ? 0 : int.Parse(v), // Convert C# String to DB Int
+//             v => v.ToString()                                // Convert DB Int to C# String
+//         );
+//     }  
+    
+    
+//       }
+// }
